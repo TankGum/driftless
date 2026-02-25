@@ -2,20 +2,13 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from analytics.analyzer import analyze_query, get_quick_summary
-from core.auth import get_user
+from core.auth import get_user, update_user_profile, get_user_profile_text
 from core.decorators import safe_handler, admin_only, pm_or_above
 from core.logger import logger
 from core.router import Intent, detect_intent
 from database.supabase import supabase
 from forecasting.responder import answer_forecast, get_risk_alert
 from knowledge.retriever import answer_question
-from knowledge.source_manager import add_source, remove_source, list_sources, resync_all_sources
-from support.feedback import submit_feedback, get_feedback_summary
-from support.onboarding import (
-    advance_onboarding,
-    get_current_step_content,
-    init_onboarding,
-)
 from support.drafter import draft_document
 from support.task_helper import get_my_tasks, get_tasks_by_name
 
@@ -68,42 +61,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Hỏi về deadline risk, forecast\n\n"
         "*⚙️ Commands:*\n"
         "/mytasks — Xem tasks của bạn (hoặc /mytasks @name)\n"
-        "/onboarding — Bắt đầu onboarding\n"
-        "/next — Bước tiếp theo trong onboarding\n"
         "/summary — Báo cáo tổng quan _(PM/Admin)_\n"
         "/riskalert — Risk alert _(PM/Admin)_\n"
-        "/feedback `nội dung` — Gửi feedback ẩn danh\n"
-        "/viewfeedback — Xem feedback _(Admin)_\n"
-        "/adddoc `link` — Thêm Google Sheets/Docs mới _(Admin)_\n"
-        "/removedoc `id` — Xóa tài liệu _(Admin)_\n"
-        "/listdocs — Xem danh sách tài liệu _(PM/Admin)_\n"
-        "/resyncdocs — Sync lại tất cả _(Admin)_\n"
+        "/profile — Xem thông tin cá nhân\n"
+        "/editprofile `field` `value` — Cập nhật thông tin\n"
         "/myrole — Xem role của bạn\n"
         "/setrole — Set role _(Admin)_",
         parse_mode="Markdown",
     )
-
-
-@safe_handler
-async def onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-    if not user:
-        await update.message.reply_text("Gõ /start trước nhé.")
-        return
-
-    init_onboarding(user["telegram_id"])
-    content, _ = get_current_step_content(user["telegram_id"])
-    await update.message.reply_text(content, parse_mode="Markdown")
-
-
-@safe_handler
-async def next_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-    if not user:
-        return
-
-    content, _ = advance_onboarding(user["telegram_id"])
-    await update.message.reply_text(content, parse_mode="Markdown")
 
 
 @safe_handler
@@ -125,162 +90,54 @@ async def my_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @safe_handler
-@admin_only
-async def add_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(update.effective_user.id)
-
-    if not user or user["role"] != "admin":
-        await update.message.reply_text("⛔ Chỉ Admin mới thêm được tài liệu.")
+    if not user:
+        await update.message.reply_text("Bạn chưa đăng ký. Gõ /start trước nhé.")
         return
 
-    if not context.args:
+    text = get_user_profile_text(user)
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+@safe_handler
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user:
+        await update.message.reply_text("Bạn chưa đăng ký. Gõ /start trước nhé.")
+        return
+
+    if not context.args or len(context.args) < 2:
         await update.message.reply_text(
-            " *Cách thêm tài liệu:*\n\n"
-            "`/adddoc [link Google Sheets hoặc Docs]`\n\n"
-            "*Ví dụ:*\n"
-            "`/adddoc https://docs.google.com/spreadsheets/d/1ABC.../edit`\n"
-            "`/adddoc https://docs.google.com/document/d/1XYZ.../edit`\n\n"
-            "⚠️ Nhớ share tài liệu cho service account trước!",
+            " *Cập nhật thông tin cá nhân:*\n\n"
+            "`/editprofile department Kỹ thuật`\n"
+            "`/editprofile position Senior Dev`\n"
+            "`/editprofile email you@company.com`\n"
+            "`/editprofile phone 0901234567`\n"
+            "`/editprofile bio Fullstack developer`\n"
+            "`/editprofile full_name Nguyễn Văn A`\n\n"
+            "Fields: `department`, `position`, `email`, `phone`, `bio`, `full_name`",
             parse_mode="Markdown",
         )
         return
 
-    url = context.args[0]
-    company_id = user.get("company_id", "pilot")
+    field = context.args[0].lower()
+    value = " ".join(context.args[1:])
 
-    processing = await update.message.reply_text("⏳ Đang đọc và index tài liệu...")
-    success, message = add_source(url, company_id, user["telegram_id"])
-    await processing.delete()
-    await update.message.reply_text(message, parse_mode="Markdown")
-
-
-@safe_handler
-@admin_only
-async def remove_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-
-    if not user or user["role"] != "admin":
-        await update.message.reply_text("⛔ Chỉ Admin mới xóa được tài liệu.")
-        return
-
-    if not context.args:
+    allowed = {"department", "position", "email", "phone", "bio", "full_name"}
+    if field not in allowed:
         await update.message.reply_text(
-            " Cách xóa tài liệu:\n\n"
-            "/removedoc [link Google Sheets hoặc Docs]\n\n"
-            "Ví dụ:\n"
-            "/removedoc https://docs.google.com/spreadsheets/d/1ABC.../edit\n\n"
-            "Dùng /listdocs để xem danh sách tài liệu hiện có.",
+            f"❌ Field `{field}` không hợp lệ.\n"
+            f"Chọn: {', '.join(sorted(allowed))}",
             parse_mode="Markdown",
         )
         return
 
-    url = context.args[0]
-    company_id = user.get("company_id", "pilot")
-
-    success, message = remove_source(url, company_id)
-    await update.message.reply_text(message, parse_mode="Markdown")
-
-
-@safe_handler
-@pm_or_above
-async def list_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-
-    if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("⛔ Chỉ Admin và PM mới xem được.")
-        return
-
-    company_id = user.get("company_id", "pilot")
-    result = list_sources(company_id)
-    await update.message.reply_text(result, parse_mode="Markdown")
-
-
-@safe_handler
-@admin_only
-async def resync_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-
-    if not user or user["role"] != "admin":
-        await update.message.reply_text("⛔ Chỉ Admin mới sync được.")
-        return
-
-    processing = await update.message.reply_text("Đang sync lại tất cả tài liệu...")
-    company_id = user.get("company_id", "pilot")
-    result = resync_all_sources(company_id)
-    await processing.delete()
-    await update.message.reply_text(result)
-
-
-@safe_handler
-@pm_or_above
-async def sync_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-    company_id = user.get("company_id", "default")
-
-    result = (
-        supabase.table("data_sources")
-        .select("*")
-        .eq("company_id", company_id)
-        .eq("is_active", True)
-        .execute()
-    )
-
-    if not result.data:
-        await update.message.reply_text("Chưa có tài liệu nào.")
-        return
-
-    lines = [" *Trạng thái sync:*\n"]
-
-    for src in result.data:
-        last_synced = src.get("last_synced")
-        if last_synced:
-            synced_str = last_synced[:16].replace("T", " ")
-            status = f"✅ {synced_str}"
-        else:
-            status = "⚠️ Chưa sync"
-
-        lines.append(f"*{src['title'] or src['source_id']}*\n   {status}\n")
-
-    lines.append("_Auto-sync mỗi giờ 1 lần_")
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-
-@safe_handler
-async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if not args:
-        await update.message.reply_text(
-            " *Gửi feedback ẩn danh:*\n\n"
-            "Cú pháp: `/feedback nội dung feedback của bạn`\n\n"
-            "_Feedback hoàn toàn ẩn danh — không ai biết bạn là ai._",
-            parse_mode="Markdown",
-        )
-        return
-
-    content = " ".join(args)
-    user = get_user(update.effective_user.id)
-    company_id = user.get("company_id", "pilot") if user else "pilot"
-
-    success = submit_feedback(content, company_id)
+    success = update_user_profile(telegram_id=update.effective_user.id, **{field: value})
     if success:
-        await update.message.reply_text(
-            "✅ Feedback của bạn đã được gửi ẩn danh.\n"
-            "Cảm ơn bạn đã đóng góp để cải thiện công ty!"
-        )
+        await update.message.reply_text(f"✅ Đã cập nhật {field} = {value}")
     else:
-        await update.message.reply_text("Lỗi khi gửi feedback. Vui lòng thử lại.")
-
-
-@safe_handler
-@admin_only
-async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = get_user(update.effective_user.id)
-    if not user or user["role"] != "admin":
-        await update.message.reply_text("⛔ Chỉ Admin mới xem được feedback.")
-        return
-
-    summary = get_feedback_summary(user.get("company_id", "pilot"))
-    await update.message.reply_text(summary, parse_mode="Markdown")
+        await update.message.reply_text("❌ Lỗi khi cập nhật. Vui lòng thử lại.")
 
 
 @safe_handler
@@ -389,10 +246,11 @@ async def handle_analytics(update: Update, text: str, user: dict):
 
 @safe_handler
 async def handle_forecast(update: Update, text: str, user: dict):
+    company_id = user.get("company_id", "pilot")
     processing_msg = await update.message.reply_text(" Đang dự báo...")
 
     try:
-        answer = answer_forecast(text)
+        answer = answer_forecast(text, company_id)
         await processing_msg.delete()
         await update.message.reply_text(
             answer,
@@ -413,10 +271,11 @@ async def risk_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Chỉ Admin và PM mới dùng được.")
         return
 
+    company_id = user.get("company_id", "pilot")
     processing_msg = await update.message.reply_text(" Đang scan rủi ro...")
 
     try:
-        alert = get_risk_alert()
+        alert = get_risk_alert(company_id)
         await processing_msg.delete()
 
         if alert:

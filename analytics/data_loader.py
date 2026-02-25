@@ -1,24 +1,61 @@
 from database.supabase import supabase
-from knowledge.sheets_reader import get_sheets_service
+from knowledge.sheets_reader import get_sheets_service, list_spreadsheets_in_folder
 
 
-def get_active_sheet_ids(company_id: str = "pilot") -> list[str]:
-    """Lấy tất cả sheet IDs đang active từ DB"""
+def _normalize(text: str) -> str:
+    return str(text or "").strip().lower().replace("_", " ")
+
+
+def _has_any(text: str, keywords: list[str]) -> bool:
+    value = _normalize(text)
+    return any(k in value for k in keywords)
+
+
+def _classify_tab(tab: str, headers: list[str]) -> str | None:
+    """Infer logical dataset from tab name first, then fallback to header hints."""
+    tab_name = _normalize(tab)
+    header_text = " ".join(_normalize(h) for h in headers)
+
+    project_keys = ["project", "progress", "task", "deadline", "milestone"]
+    kpi_keys = ["kpi", "okr", "metric", "target", "achievement"]
+    team_keys = ["team", "member", "workload", "performance", "capacity"]
+
+    if _has_any(tab_name, project_keys):
+        return "project_progress"
+    if _has_any(tab_name, kpi_keys):
+        return "kpi_tracking"
+    if _has_any(tab_name, team_keys):
+        return "team_performance"
+
+    if _has_any(header_text, project_keys):
+        return "project_progress"
+    if _has_any(header_text, kpi_keys):
+        return "kpi_tracking"
+    if _has_any(header_text, team_keys):
+        return "team_performance"
+    return None
+
+
+def get_company_sheet_ids(company_id: str = "pilot") -> list[str]:
+    """Lấy tất cả sheet IDs từ Drive folder của company"""
     result = (
-        supabase.table("data_sources")
-        .select("source_id")
+        supabase.table("companies")
+        .select("drive_folder_id")
         .eq("company_id", company_id)
-        .eq("source_type", "google_sheets")
-        .eq("is_active", True)
         .execute()
     )
-    return [row["source_id"] for row in result.data]
+    if not result.data or not result.data[0].get("drive_folder_id"):
+        return []
+
+    folder_id = result.data[0]["drive_folder_id"]
+    files = list_spreadsheets_in_folder(folder_id)
+    return [f["id"] for f in files]
 
 
 def load_sheet_data(sheet_name: str, company_id: str = "pilot") -> list[dict]:
-    """Tìm và đọc sheet theo tên từ tất cả sheet files đang active"""
+    """Tìm và đọc sheet theo tên từ tất cả sheet files trong Drive folder"""
     service = get_sheets_service()
-    sheet_ids = get_active_sheet_ids(company_id)
+    sheet_ids = get_company_sheet_ids(company_id)
 
     for sheet_id in sheet_ids:
         try:
@@ -45,21 +82,24 @@ def load_sheet_data(sheet_name: str, company_id: str = "pilot") -> list[dict]:
 
 
 def load_project_progress(company_id: str = "pilot") -> list[dict]:
-    return load_sheet_data("Project Progress", company_id)
+    data = load_all_data(company_id)
+    return data.get("project_progress", [])
 
 
 def load_kpi_tracking(company_id: str = "pilot") -> list[dict]:
-    return load_sheet_data("KPI Tracking", company_id)
+    data = load_all_data(company_id)
+    return data.get("kpi_tracking", [])
 
 
 def load_team_performance(company_id: str = "pilot") -> list[dict]:
-    return load_sheet_data("Team Performance", company_id)
+    data = load_all_data(company_id)
+    return data.get("team_performance", [])
 
 
 def load_all_data(company_id: str = "pilot") -> dict:
-    """Load toàn bộ data từ tất cả sheets đang active"""
+    """Load toàn bộ data từ tất cả sheets trong Drive folder của company"""
     service = get_sheets_service()
-    sheet_ids = get_active_sheet_ids(company_id)
+    sheet_ids = get_company_sheet_ids(company_id)
 
     sheets_map = {}
     project_progress = []
@@ -92,12 +132,13 @@ def load_all_data(company_id: str = "pilot") -> dict:
                 ]
 
                 sheets_map.setdefault(tab, []).extend(data)
-                tab_lower = tab.lower()
-                if "project" in tab_lower or "progress" in tab_lower:
+
+                bucket = _classify_tab(tab, headers)
+                if bucket == "project_progress":
                     project_progress.extend(data)
-                elif "kpi" in tab_lower:
+                elif bucket == "kpi_tracking":
                     kpi_tracking.extend(data)
-                elif "team" in tab_lower or "performance" in tab_lower:
+                elif bucket == "team_performance":
                     team_performance.extend(data)
         except Exception as e:
             print(f"Error loading sheet {sheet_id}: {e}")

@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
@@ -11,42 +13,180 @@ SCOPES = [
 
 
 def get_sheets_service():
-    creds = Credentials.from_service_account_file(
-        GOOGLE_CREDENTIALS_PATH, scopes=SCOPES
-    )
+    creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
     return build("sheets", "v4", credentials=creds)
 
 
 def get_docs_service():
-    creds = Credentials.from_service_account_file(
-        GOOGLE_CREDENTIALS_PATH, scopes=SCOPES
-    )
+    creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
     return build("docs", "v1", credentials=creds)
 
 
 def get_drive_service():
-    creds = Credentials.from_service_account_file(
-        GOOGLE_CREDENTIALS_PATH, scopes=SCOPES
-    )
+    creds = Credentials.from_service_account_file(GOOGLE_CREDENTIALS_PATH, scopes=SCOPES)
     return build("drive", "v3", credentials=creds)
 
 
+def get_drive_file_meta(file_id: str) -> dict:
+    service = get_drive_service()
+    return (
+        service.files()
+        .get(
+            fileId=file_id,
+            fields="id,name,mimeType,modifiedTime",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+
+
+def search_drive_files(prompt: str, page_size: int = 8, folder_id: str = None) -> list[dict]:
+    """Search docs/sheets/pdf by prompt text in Drive, optionally scoped to a folder."""
+    import re
+
+    service = get_drive_service()
+    stop_words = {
+        "file", "drive", "docs", "sheets", "pdf",
+        "tìm", "tim", "cho", "tôi", "toi", "của", "cua",
+        "trong", "một", "mot", "thế", "the", "nào", "nao",
+        "như", "nhu", "bạn", "ban", "hãy", "hay", "với", "voi",
+        "được", "duoc", "không", "khong", "lên", "len",
+        "lấy", "lay", "đọc", "doc", "xem", "mở", "mo",
+        "tải", "tai", "trên", "tren", "từ", "tu",
+        "phân", "phan", "tích", "tich",
+    }
+    terms = [
+        t
+        for t in re.findall(r"[\w.-]{2,}", prompt or "", re.UNICODE)
+        if t.lower() not in stop_words
+    ][:6]
+
+    file_mime_filter = (
+        "mimeType='application/vnd.google-apps.document' "
+        "or mimeType='application/vnd.google-apps.spreadsheet' "
+        "or mimeType='application/pdf'"
+    )
+
+    folder_prefix = f"'{folder_id}' in parents and " if folder_id else ""
+
+    all_files: list[dict] = []
+    seen_ids: set[str] = set()
+
+    # 1) Search for matching folders, then list files inside them
+    if terms:
+        safe_terms = [t.replace("'", "") for t in terms]
+        folder_name_filter = " or ".join([f"name contains '{t}'" for t in safe_terms])
+        folder_q = (
+            f"{folder_prefix}mimeType='application/vnd.google-apps.folder' "
+            f"and ({folder_name_filter}) and trashed=false"
+        )
+        try:
+            folder_result = (
+                service.files()
+                .list(
+                    q=folder_q,
+                    fields="files(id, name)",
+                    pageSize=5,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+            for folder in folder_result.get("files", []):
+                child_q = (
+                    f"'{folder['id']}' in parents "
+                    f"and ({file_mime_filter}) and trashed=false"
+                )
+                child_result = (
+                    service.files()
+                    .list(
+                        q=child_q,
+                        fields="files(id, name, mimeType, modifiedTime)",
+                        orderBy="modifiedTime desc",
+                        pageSize=page_size,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                    )
+                    .execute()
+                )
+                for f in child_result.get("files", []):
+                    if f["id"] not in seen_ids:
+                        seen_ids.add(f["id"])
+                        all_files.append(f)
+        except Exception:
+            pass
+
+    # 2) Search files by name directly
+    if terms:
+        safe_terms = [t.replace("'", "") for t in terms]
+        name_filter = " or ".join([f"name contains '{t}'" for t in safe_terms])
+        q = f"{folder_prefix}({file_mime_filter}) and ({name_filter}) and trashed=false"
+    else:
+        q = f"{folder_prefix}({file_mime_filter}) and trashed=false"
+
+    result = (
+        service.files()
+        .list(
+            q=q,
+            fields="files(id, name, mimeType, modifiedTime)",
+            orderBy="modifiedTime desc",
+            pageSize=page_size,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    for f in result.get("files", []):
+        if f["id"] not in seen_ids:
+            seen_ids.add(f["id"])
+            all_files.append(f)
+
+    # 3) Search by file content (fullText) if name search found few results
+    if terms and len(all_files) < page_size:
+        try:
+            safe_terms = [t.replace("'", "") for t in terms]
+            ft_filter = " or ".join([f"fullText contains '{t}'" for t in safe_terms])
+            ft_q = f"{folder_prefix}({file_mime_filter}) and ({ft_filter}) and trashed=false"
+            ft_result = (
+                service.files()
+                .list(
+                    q=ft_q,
+                    fields="files(id, name, mimeType, modifiedTime)",
+                    orderBy="modifiedTime desc",
+                    pageSize=page_size,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+            for f in ft_result.get("files", []):
+                if f["id"] not in seen_ids:
+                    seen_ids.add(f["id"])
+                    all_files.append(f)
+        except Exception:
+            pass
+
+    return all_files[:page_size]
+
+
 def read_sheet(sheet_id: str, range_name: str = None) -> list[dict]:
-    """Đọc toàn bộ một sheet, trả về list of dicts"""
+    """Read all tabs from a Google Sheet and return row dicts."""
     service = get_sheets_service()
 
     spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-
     all_data = []
     sheets = spreadsheet.get("sheets", [])
 
     for sheet in sheets:
         sheet_name = sheet["properties"]["title"]
+        target_range = range_name or sheet_name
 
-        result = service.spreadsheets().values().get(
-            spreadsheetId=sheet_id,
-            range=sheet_name,
-        ).execute()
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=sheet_id, range=target_range)
+            .execute()
+        )
 
         rows = result.get("values", [])
         if not rows:
@@ -64,7 +204,7 @@ def read_sheet(sheet_id: str, range_name: str = None) -> list[dict]:
 
 
 def sheet_to_text(rows: list[dict]) -> list[str]:
-    """Convert rows thành text chunks để index"""
+    """Convert sheet rows to text chunks for indexing."""
     chunks = []
     current_sheet = None
     current_chunk = []
@@ -78,9 +218,7 @@ def sheet_to_text(rows: list[dict]) -> list[str]:
             current_sheet = sheet_name
             current_chunk = [f"=== {sheet_name} ==="]
 
-        row_text = " | ".join(
-            [f"{k}: {v}" for k, v in row.items() if not k.startswith("_") and v]
-        )
+        row_text = " | ".join([f"{k}: {v}" for k, v in row.items() if not k.startswith("_") and v])
 
         if row_text.strip():
             current_chunk.append(row_text)
@@ -96,7 +234,7 @@ def sheet_to_text(rows: list[dict]) -> list[str]:
 
 
 def read_doc(doc_id: str) -> list[dict]:
-    """Đọc nội dung Google Doc, trả về list of dicts theo từng section"""
+    """Read Google Doc content and split by headings."""
     service = get_docs_service()
     doc = service.documents().get(documentId=doc_id).execute()
 
@@ -113,13 +251,7 @@ def read_doc(doc_id: str) -> list[dict]:
             continue
 
         style = paragraph.get("paragraphStyle", {}).get("namedStyleType", "")
-
-        text = "".join(
-            [
-                el.get("textRun", {}).get("content", "")
-                for el in paragraph.get("elements", [])
-            ]
-        ).strip()
+        text = "".join([el.get("textRun", {}).get("content", "") for el in paragraph.get("elements", [])]).strip()
 
         if not text:
             continue
@@ -153,7 +285,7 @@ def read_doc(doc_id: str) -> list[dict]:
 
 
 def doc_to_text(chunks: list[dict]) -> list[str]:
-    """Convert doc chunks thành text để index"""
+    """Convert doc chunks to text chunks for indexing."""
     result = []
     for chunk in chunks:
         heading = chunk.get("_heading", "")
@@ -166,17 +298,90 @@ def doc_to_text(chunks: list[dict]) -> list[str]:
     return result
 
 
+def read_pdf(file_id: str) -> tuple[str, list[str]]:
+    """Read PDF from Drive and return (title, extracted_pages)."""
+    try:
+        from pypdf import PdfReader
+    except Exception as e:
+        raise RuntimeError("Thiếu thư viện pypdf. Hãy cài dependencies mới để đọc PDF.") from e
+
+    service = get_drive_service()
+    meta = get_drive_file_meta(file_id)
+    raw_bytes = service.files().get_media(fileId=file_id).execute()
+
+    reader = PdfReader(BytesIO(raw_bytes))
+    pages = []
+    for page in reader.pages:
+        text = (page.extract_text() or "").strip()
+        if text:
+            pages.append(text)
+
+    return meta.get("name", file_id), pages
+
+
+def pdf_to_text(title: str, pages: list[str], max_chars: int = 2500) -> list[str]:
+    """Convert PDF pages to chunks for indexing."""
+    chunks = []
+    current = []
+    current_len = 0
+
+    for idx, page_text in enumerate(pages, start=1):
+        block = f"[Trang {idx}]\n{page_text}"
+        if current_len + len(block) > max_chars and current:
+            chunks.append(f"=== {title} ===\n" + "\n\n".join(current))
+            current = []
+            current_len = 0
+
+        current.append(block)
+        current_len += len(block)
+
+    if current:
+        chunks.append(f"=== {title} ===\n" + "\n\n".join(current))
+
+    return chunks
+
+
+def list_spreadsheets_in_folder(folder_id: str) -> list[dict]:
+    """List all spreadsheets in a Drive folder."""
+    service = get_drive_service()
+    q = (
+        f"'{folder_id}' in parents "
+        f"and mimeType='application/vnd.google-apps.spreadsheet' "
+        f"and trashed=false"
+    )
+    result = (
+        service.files()
+        .list(
+            q=q,
+            fields="files(id, name, mimeType, modifiedTime)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    return result.get("files", [])
+
+
 def list_drive_files(folder_id: str = None) -> list[dict]:
-    """List tất cả Google Docs và Sheets trong Drive (hoặc trong folder)"""
+    """List Google Docs, Sheets, and PDFs in Drive (or in a folder)."""
     service = get_drive_service()
 
-    query = "mimeType='application/vnd.google-apps.document' or mimeType='application/vnd.google-apps.spreadsheet'"
+    query = (
+        "mimeType='application/vnd.google-apps.document' "
+        "or mimeType='application/vnd.google-apps.spreadsheet' "
+        "or mimeType='application/pdf'"
+    )
     if folder_id:
         query = f"'{folder_id}' in parents and ({query})"
 
-    result = service.files().list(
-        q=query,
-        fields="files(id, name, mimeType)",
-    ).execute()
-
+    result = (
+        service.files()
+        .list(
+            q=query,
+            fields="files(id, name, mimeType, modifiedTime)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
     return result.get("files", [])

@@ -24,6 +24,7 @@ INTENT_KEYWORDS = {
         "document",
         "spec",
         "flow",
+        "drive",
     ],
     Intent.ANALYTICS_QUERY: [
         "kpi",
@@ -64,8 +65,6 @@ INTENT_KEYWORDS = {
     Intent.SUPPORT_REQUEST: [
         "giúp tôi",
         "hỗ trợ",
-        "onboarding",
-        "mới vào",
         "viết email",
         "draft",
         "nhắc tôi",

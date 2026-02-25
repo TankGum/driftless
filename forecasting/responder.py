@@ -2,19 +2,14 @@ import json
 
 from anthropic import Anthropic
 from config import CLAUDE_API_KEY
-from forecasting.engine import (
-    forecast_deadline_risk,
-    forecast_kpi_miss,
-    forecast_team_workload,
-    get_full_forecast,
-)
+from forecasting.engine import get_full_forecast
 
 claude = Anthropic(api_key=CLAUDE_API_KEY)
 
 
-def answer_forecast(query: str) -> str:
+def answer_forecast(query: str, company_id: str = "pilot") -> str:
     """Trả lời câu hỏi dự báo"""
-    forecast = get_full_forecast()
+    forecast = get_full_forecast(company_id)
     forecast_context = json.dumps(forecast, ensure_ascii=False, indent=2)
 
     response = claude.messages.create(
@@ -47,9 +42,9 @@ Câu hỏi: {query}""",
     return response.content[0].text
 
 
-def get_risk_alert() -> str:
+def get_risk_alert(company_id: str = "pilot") -> str:
     """Tạo risk alert tự động — push hàng ngày"""
-    forecast = get_full_forecast()
+    forecast = get_full_forecast(company_id)
 
     high_risks = [t for t in forecast["deadline_risks"] if "" in t["risk_level"]]
     kpi_risks = [k for k in forecast["kpi_risks"] if "" in k["risk_level"]]

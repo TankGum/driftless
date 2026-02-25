@@ -11,17 +11,19 @@ def generate_company_id(name: str) -> str:
     return f"{base[:20]}_{suffix}"
 
 
-def create_company(name: str, admin_telegram_id: int) -> dict:
+def create_company(name: str, admin_telegram_id: int, drive_folder_id: str = None) -> dict:
     company_id = generate_company_id(name)
 
-    result = supabase.table("companies").insert(
-        {
-            "company_id": company_id,
-            "name": name,
-            "admin_telegram_id": admin_telegram_id,
-            "is_active": True,
-        }
-    ).execute()
+    insert_data = {
+        "company_id": company_id,
+        "name": name,
+        "admin_telegram_id": admin_telegram_id,
+        "is_active": True,
+    }
+    if drive_folder_id:
+        insert_data["drive_folder_id"] = drive_folder_id
+
+    result = supabase.table("companies").insert(insert_data).execute()
 
     supabase.table("users").upsert(
         {
@@ -78,6 +80,17 @@ def join_company_by_code(telegram_id: int, code: str) -> tuple[bool, str]:
     ).eq("telegram_id", telegram_id).execute()
 
     return True, f"✅ Đã tham gia *{company['name']}*! Gõ /help để bắt đầu."
+
+
+def set_drive_folder(company_id: str, drive_folder_id: str) -> bool:
+    """Update Drive folder ID for a company."""
+    result = (
+        supabase.table("companies")
+        .update({"drive_folder_id": drive_folder_id})
+        .eq("company_id", company_id)
+        .execute()
+    )
+    return bool(result.data)
 
 
 def get_user_company_by_zalo(zalo_id: str) -> str:
