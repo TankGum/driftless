@@ -9,7 +9,9 @@
       "WebFetch(domain:pypi.org)",
       "Bash(cd:*)",
       "Bash(del:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(file:*)",
+      "Bash(python3:*)"
     ]
   }
 }

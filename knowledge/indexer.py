@@ -2,10 +2,13 @@ import anthropic
 
 from database.supabase import supabase
 from knowledge.sheets_reader import (
+    get_sheet_title,
     read_sheet,
     sheet_to_text,
     read_doc,
     doc_to_text,
+    read_pdf,
+    pdf_to_text,
 )
 
 
@@ -29,6 +32,8 @@ def get_embedding(text: str) -> list[float]:
 
 def detect_source_type(source_id: str) -> str:
     """Detect loại source dựa trên ID hoặc URL"""
+    if source_id.startswith("pdf:"):
+        return "google_pdf"
     if source_id.startswith("doc:"):
         return "google_docs"
     return "google_sheets"
@@ -37,18 +42,25 @@ def detect_source_type(source_id: str) -> str:
 def sync_source(source_id: str, company_id: str = "pilot"):
     """Sync bất kỳ source nào — Sheets hoặc Docs"""
     source_type = detect_source_type(source_id)
-    real_id = source_id.replace("doc:", "").replace("sheet:", "").strip()
+    real_id = source_id.replace("pdf:", "").replace("doc:", "").replace("sheet:", "").strip()
 
     print(f"Syncing {source_type}: {real_id}")
 
-    if source_type == "google_docs":
+    if source_type == "google_pdf":
+        rows = read_pdf(real_id)
+        chunks = pdf_to_text(rows)
+        raw_title = rows[0]["_sheet_name"] if rows else real_id
+        title = f"[PDF] {raw_title}"
+    elif source_type == "google_docs":
         rows = read_doc(real_id)
         chunks = doc_to_text(rows)
-        title = rows[0]["_sheet_name"] if rows else real_id
+        raw_title = rows[0]["_sheet_name"] if rows else real_id
+        title = f"[Doc] {raw_title}"
     else:
         rows = read_sheet(real_id)
         chunks = sheet_to_text(rows)
-        title = f"Sheet {real_id}"
+        raw_title = get_sheet_title(real_id)
+        title = f"[Sheet] {raw_title}"
 
     print(f"Found {len(chunks)} chunks")
 

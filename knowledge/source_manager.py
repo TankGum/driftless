@@ -11,7 +11,8 @@ def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bo
             "❌ Không nhận ra link này.\n\n"
             "Hỗ trợ:\n"
             "• Google Sheets: `docs.google.com/spreadsheets/d/ID`\n"
-            "• Google Docs: `docs.google.com/document/d/ID`"
+            "• Google Docs: `docs.google.com/document/d/ID`\n"
+            "• Google Drive PDF: `drive.google.com/file/d/ID/view`"
         )
 
     existing = (
@@ -26,10 +27,13 @@ def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bo
         return False, "⚠️ Tài liệu này đã được thêm trước đó rồi."
 
     try:
-        chunks = sync_source(
-            f"doc:{source_id}" if source_type == "google_docs" else source_id,
-            company_id,
-        )
+        if source_type == "google_docs":
+            sync_id = f"doc:{source_id}"
+        elif source_type == "google_pdf":
+            sync_id = f"pdf:{source_id}"
+        else:
+            sync_id = source_id
+        chunks = sync_source(sync_id, company_id)
         if chunks == 0:
             return False, "⚠️ Sync thành công nhưng không tìm thấy nội dung. Kiểm tra lại tài liệu."
     except Exception as e:
@@ -118,11 +122,11 @@ def list_sources(company_id: str) -> str:
     lines = [f" *Tài liệu đang được index ({len(result.data)} nguồn):*\n"]
     for i, src in enumerate(result.data, 1):
         title = src['title'] or src['source_id']
-        source_id = src['source_id']
+        url = _build_url(src['source_type'], src['source_id'])
         lines.append(
             f"{i}. *{title}*\n"
             f"   Type: {src['source_type']}\n"
-            f"   ID: {source_id}\n"
+            f"   Link: {url}\n"
         )
     lines.append("Dùng /removedoc [link] để xóa tài liệu")
     return "\n".join(lines)
@@ -144,11 +148,12 @@ def resync_all_sources(company_id: str) -> str:
     failed = 0
     for src in result.data:
         try:
-            source_id = (
-                f"doc:{src['source_id']}"
-                if src["source_type"] == "google_docs"
-                else src["source_id"]
-            )
+            if src["source_type"] == "google_docs":
+                source_id = f"doc:{src['source_id']}"
+            elif src["source_type"] == "google_pdf":
+                source_id = f"pdf:{src['source_id']}"
+            else:
+                source_id = src["source_id"]
             sync_source(source_id, company_id)
 
             supabase.table("data_sources").update(
@@ -167,6 +172,16 @@ def resync_all_sources(company_id: str) -> str:
     )
 
 
+def _build_url(source_type: str, source_id: str) -> str:
+    if source_type == "google_sheets":
+        return f"https://docs.google.com/spreadsheets/d/{source_id}"
+    if source_type == "google_docs":
+        return f"https://docs.google.com/document/d/{source_id}"
+    if source_type == "google_pdf":
+        return f"https://drive.google.com/file/d/{source_id}/view"
+    return source_id
+
+
 def parse_source(url_or_id: str) -> tuple[str, str]:
     url = url_or_id.strip()
 
@@ -181,6 +196,20 @@ def parse_source(url_or_id: str) -> tuple[str, str]:
         try:
             source_id = url.split("document/d/")[1].split("/")[0]
             return source_id, "google_docs"
+        except Exception:
+            pass
+
+    if "drive.google.com/file/d/" in url:
+        try:
+            source_id = url.split("/file/d/")[1].split("/")[0]
+            return source_id, "google_pdf"
+        except Exception:
+            pass
+
+    if "drive.google.com/open?id=" in url:
+        try:
+            source_id = url.split("open?id=")[1].split("&")[0]
+            return source_id, "google_pdf"
         except Exception:
             pass
 
