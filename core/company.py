@@ -78,3 +78,36 @@ def join_company_by_code(telegram_id: int, code: str) -> tuple[bool, str]:
     ).eq("telegram_id", telegram_id).execute()
 
     return True, f"✅ Đã tham gia *{company['name']}*! Gõ /help để bắt đầu."
+
+
+def get_user_company_by_zalo(zalo_id: str) -> str:
+    from core.auth import get_user_by_zalo_id
+
+    user = get_user_by_zalo_id(zalo_id)
+    if not user:
+        return "default"
+    return user.get("company_id") or "default"
+
+
+def join_company_by_code_zalo(zalo_id: str, code: str) -> tuple[bool, str]:
+    result = (
+        supabase.table("companies")
+        .select("*")
+        .eq("invite_code", code.upper())
+        .eq("is_active", True)
+        .execute()
+    )
+
+    if not result.data:
+        return False, "Invite code khong hop le hoac da het han."
+
+    company = result.data[0]
+
+    supabase.table("users").update(
+        {
+            "company_id": company["company_id"],
+            "role": "member",
+        }
+    ).eq("zalo_id", zalo_id).execute()
+
+    return True, f"Da tham gia {company['name']}! Gui 'help' de bat dau."

@@ -7,7 +7,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import CLAUDE_API_KEY, GOOGLE_CREDENTIALS_PATH, SUPABASE_KEY, SUPABASE_URL, TELEGRAM_TOKEN
+from config import (
+    CLAUDE_API_KEY,
+    GOOGLE_CREDENTIALS_PATH,
+    SUPABASE_KEY,
+    SUPABASE_URL,
+    TELEGRAM_TOKEN,
+    ZALO_BOT_TOKEN,
+)
 from core.logger import logger
 from database.supabase import supabase
 
@@ -20,6 +27,7 @@ def check_env():
         "SUPABASE_KEY",
         "CLAUDE_API_KEY",
         "GOOGLE_CREDENTIALS_PATH",
+        "ZALO_BOT_TOKEN",
     ]
 
     missing = [k for k in required if not os.getenv(k)]

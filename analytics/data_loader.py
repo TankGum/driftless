@@ -61,12 +61,10 @@ def load_all_data(company_id: str = "pilot") -> dict:
     service = get_sheets_service()
     sheet_ids = get_active_sheet_ids(company_id)
 
-    all_data = {
-        "project_progress": [],
-        "kpi_tracking": [],
-        "team_performance": [],
-        "other_sheets": {},
-    }
+    sheets_map = {}
+    project_progress = []
+    kpi_tracking = []
+    team_performance = []
 
     for sheet_id in sheet_ids:
         try:
@@ -93,17 +91,21 @@ def load_all_data(company_id: str = "pilot") -> dict:
                     for row in rows[1:]
                 ]
 
+                sheets_map.setdefault(tab, []).extend(data)
                 tab_lower = tab.lower()
                 if "project" in tab_lower or "progress" in tab_lower:
-                    all_data["project_progress"].extend(data)
+                    project_progress.extend(data)
                 elif "kpi" in tab_lower:
-                    all_data["kpi_tracking"].extend(data)
+                    kpi_tracking.extend(data)
                 elif "team" in tab_lower or "performance" in tab_lower:
-                    all_data["team_performance"].extend(data)
-                else:
-                    all_data["other_sheets"][tab] = data
+                    team_performance.extend(data)
         except Exception as e:
             print(f"Error loading sheet {sheet_id}: {e}")
             continue
 
-    return all_data
+    return {
+        "sheets": sheets_map,
+        "project_progress": project_progress,
+        "kpi_tracking": kpi_tracking,
+        "team_performance": team_performance,
+    }

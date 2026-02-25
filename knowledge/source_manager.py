@@ -3,7 +3,7 @@ from database.supabase import supabase
 from knowledge.indexer import sync_source
 
 
-def add_source(url_or_id: str, company_id: str, added_by: int) -> tuple[bool, str]:
+def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bool, str]:
     source_id, source_type = parse_source(url_or_id)
 
     if not source_id:
@@ -44,7 +44,7 @@ def add_source(url_or_id: str, company_id: str, added_by: int) -> tuple[bool, st
             "company_id": company_id,
             "source_type": source_type,
             "source_id": source_id,
-            "added_by": added_by,
+            "added_by": str(added_by),
             "is_active": True,
         }
     ).execute()

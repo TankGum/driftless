@@ -11,6 +11,15 @@ def analyze_query(query: str, company_id: str = "pilot") -> str:
     """Phân tích câu hỏi analytics và trả lời dựa trên data thật"""
     data = load_all_data(company_id)
 
+    other_sheets_context = []
+    for tab_name, rows in data.get("sheets", {}).items():
+        snippet = (
+            json.dumps(rows[:3], ensure_ascii=False, indent=2)
+            if rows
+            else "Không có dữ liệu"
+        )
+        other_sheets_context.append(f"=== {tab_name} ===\n{snippet}")
+
     data_context = json.dumps(data, ensure_ascii=False, indent=2)
 
     response = claude.messages.create(
@@ -18,10 +27,7 @@ def analyze_query(query: str, company_id: str = "pilot") -> str:
         max_tokens=1500,
         system="""Bạn là Driftless Analytics — AI phân tích dữ liệu nội bộ công ty.
 
-Bạn có quyền truy cập vào 3 nguồn dữ liệu:
-- project_progress: tiến độ từng task (Task ID, Task Name, Owner, Start/End Date, Status, Completion %, Priority)
-- kpi_tracking: theo dõi KPI (KPI Name, Target, Current, Achievement %, Owner, Status)  
-- team_performance: hiệu suất thành viên (Team Member, Role, Assigned Tasks, Completed Tasks, Performance %)
+Bạn có quyền truy cập vào tất cả các sheet đang được index cho company: project progress, KPI, team performance, và bất kỳ sheet khác nào đang được bật (ví dụ: budget, roadmap, backlog...). Claude sẽ xét toàn bộ dữ liệu được cung cấp để trả lời một câu hỏi analytics bất kỳ.
 
 Nguyên tắc:
 - Tính toán chính xác dựa trên số liệu thật
@@ -35,6 +41,9 @@ Nguyên tắc:
                 "role": "user",
                 "content": f"""Dữ liệu hiện tại:
 {data_context}
+
+Các sheet bổ sung:
+{'\n\n'.join(other_sheets_context) or 'Không có sheet bổ sung.'}
 
 Câu hỏi: {query}""",
             }
