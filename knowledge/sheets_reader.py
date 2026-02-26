@@ -1,5 +1,9 @@
+import io
+
+import pypdf
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 from config import GOOGLE_CREDENTIALS_PATH
 
@@ -29,6 +33,60 @@ def get_drive_service():
         GOOGLE_CREDENTIALS_PATH, scopes=SCOPES
     )
     return build("drive", "v3", credentials=creds)
+
+
+def get_sheet_title(sheet_id: str) -> str:
+    """Lấy tên thực của spreadsheet từ Drive"""
+    service = get_sheets_service()
+    spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    return spreadsheet["properties"]["title"]
+
+
+def read_pdf(file_id: str) -> list[dict]:
+    """Đọc file PDF từ Google Drive, trả về list of dicts theo từng trang"""
+    drive_service = get_drive_service()
+
+    file_meta = drive_service.files().get(fileId=file_id, fields="name").execute()
+    filename = file_meta.get("name", file_id)
+
+    request = drive_service.files().get_media(fileId=file_id)
+    buffer = io.BytesIO()
+    downloader = MediaIoBaseDownload(buffer, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+
+    buffer.seek(0)
+    reader = pypdf.PdfReader(buffer)
+
+    chunks = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        # Remove null bytes and other control characters that PostgreSQL rejects
+        text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
+        if text.strip():
+            chunks.append(
+                {
+                    "_sheet_name": filename,
+                    "_heading": f"Trang {i + 1}",
+                    "_content": text,
+                    "_row_number": i,
+                }
+            )
+
+    return chunks
+
+
+def pdf_to_text(chunks: list[dict]) -> list[str]:
+    """Convert PDF chunks thành text để index"""
+    result = []
+    for chunk in chunks:
+        sheet = chunk.get("_sheet_name", "")
+        heading = chunk.get("_heading", "")
+        content = chunk.get("_content", "")
+        if content.strip():
+            result.append(f"=== {sheet} — {heading} ===\n{content}")
+    return result
 
 
 def read_sheet(sheet_id: str, range_name: str = None) -> list[dict]:
