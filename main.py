@@ -147,7 +147,7 @@ def _run_zalo():
         logger.info("Zalo bot started (polling)")
         zalo_app.run_polling()
     except Exception as e:
-        logger.error(f"Zalo bot crashed: {e}")
+        logger.error(f"Zalo bot crashed: {e}", exc_info=True)
 
 
 def main():

@@ -4,26 +4,55 @@ from database.supabase import supabase
 
 claude = Anthropic(api_key=CLAUDE_API_KEY)
 
+_STOPWORDS = {
+    "là", "và", "của", "có", "không", "tôi", "bạn", "cho", "về", "với",
+    "từ", "trong", "a", "the", "of", "in", "for", "to", "by", "at", "on",
+    "được", "này", "đó", "các", "một", "những", "theo", "khi", "đã", "sẽ",
+}
+
+
+def _title_matches_query(title: str, query: str) -> bool:
+    """Check if document title has any significant word overlap with query."""
+    query_words = set(query.lower().split()) - _STOPWORDS
+    title_words = set(title.lower().split()) - _STOPWORDS
+    return bool(query_words & title_words)
+
 
 def search_knowledge(query: str, company_id: str = "pilot", top_k: int = 5) -> list[str]:
     """Tìm chunks liên quan nhất với câu hỏi"""
     result = (
         supabase.table("document_chunks")
-        .select("content, document_id, documents(company_id)")
+        .select("content, document_id, documents(company_id, title)")
         .execute()
     )
 
-    all_chunks = [
-        row["content"]
-        for row in result.data
+    # Filter by company, keeping title metadata
+    company_rows = [
+        row for row in result.data
         if row.get("documents", {}).get("company_id") == company_id
     ]
 
-    if not all_chunks:
+    if not company_rows:
         return []
 
+    # Pre-filter: prefer docs whose title overlaps with query words
+    matching_rows = [
+        r for r in company_rows
+        if _title_matches_query(r.get("documents", {}).get("title", ""), query)
+    ]
+
+    # Fall back to all company rows if no title match
+    filtered_rows = matching_rows if matching_rows else company_rows
+
+    # Build chunks with document title context for better Haiku ranking
+    chunks_with_meta = [
+        (row.get("documents", {}).get("title", "Tài liệu"), row["content"])
+        for row in filtered_rows
+    ]
+
     chunks_text = "\n\n---\n\n".join(
-        [f"[Chunk {i+1}]\n{chunk}" for i, chunk in enumerate(all_chunks)]
+        f"[Chunk {i+1} — Tài liệu: {title}]\n{content}"
+        for i, (title, content) in enumerate(chunks_with_meta)
     )
 
     ranking_response = claude.messages.create(
@@ -48,10 +77,11 @@ Dưới đây là các đoạn tài liệu. Hãy trả về số thứ tự củ
             for x in indices_text.split(",")
             if x.strip().isdigit()
         ]
-        relevant_chunks = [all_chunks[i] for i in indices if i < len(all_chunks)]
+        all_contents = [content for _, content in chunks_with_meta]
+        relevant_chunks = [all_contents[i] for i in indices if i < len(all_contents)]
         return relevant_chunks
     except Exception:
-        return all_chunks[:top_k]
+        return [content for _, content in chunks_with_meta[:top_k]]
 
 
 def answer_question(query: str, company_id: str = "pilot") -> str:

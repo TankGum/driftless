@@ -24,6 +24,7 @@ INTENT_KEYWORDS = {
         "document",
         "spec",
         "flow",
+        "báo cáo",
     ],
     Intent.ANALYTICS_QUERY: [
         "kpi",
@@ -33,7 +34,6 @@ INTENT_KEYWORDS = {
         "velocity",
         "tháng này",
         "tuần này",
-        "báo cáo",
         "thống kê",
         "report",
         "performance",
@@ -51,6 +51,7 @@ INTENT_KEYWORDS = {
         "hoàn thành",
         "chưa xong",
         "trễ hạn",
+        "phân tích",
     ],
     Intent.FORECAST_QUERY: [
         "dự báo",

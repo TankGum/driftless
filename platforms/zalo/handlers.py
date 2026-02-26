@@ -38,7 +38,7 @@ def _safe_handler(func):
             if update and update.message:
                 try:
                     await update.message.reply_text(
-                        "Xin loi, toi gap loi. Vui long thu lai."
+                        "Xin lỗi, tôi gặp lỗi. Vui lòng thử lại."
                     )
                 except Exception:
                     pass
@@ -84,49 +84,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ).execute()
 
         welcome = (
-            f"Xin chao {getattr(user, 'display_name', 'ban')}!\n\n"
-            "Toi la Driftless — AI Agent cua cong ty ban.\n"
-            "Hoi toi bat cu dieu gi ve quy trinh, tai lieu, hay du an.\n\n"
-            "Go /help de xem cac lenh co san."
+            f"Xin chào {getattr(user, 'display_name', 'bạn')}!\n\n"
+            "Tôi là Driftless — AI Agent của công ty bạn.\n"
+            "Hỏi tôi bất cứ điều gì về quy trình, tài liệu, hay dự án.\n\n"
+            "Gõ /help để xem các lệnh có sẵn."
         )
 
         if auto_company_id == "default" and len(active_companies.data) > 1:
-            welcome += "\n\nNeu chua thay tai lieu, hay dung /join [invite_code] de vao dung cong ty."
+            welcome += "\n\nNếu chưa thấy tài liệu, hãy dùng /join [invite_code] để vào đúng công ty."
 
         await update.message.reply_text(welcome)
     else:
         await update.message.reply_text(
-            f"Chao lai {getattr(user, 'display_name', 'ban')}! Toi co the giup gi cho ban?"
+            f"Chào lại {getattr(user, 'display_name', 'bạn')}! Tôi có thể giúp gì cho bạn?"
         )
 
 
 @_safe_handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Driftless — AI Agent cua cong ty ban\n\n"
-        "Kien thuc:\n"
-        "Hoi bat cu dieu gi ve quy trinh, tai lieu\n\n"
+        "Driftless — AI Agent của công ty bạn\n\n"
+        "Kiến thức:\n"
+        "Hỏi bất cứ điều gì về quy trình, tài liệu\n\n"
         "Analytics:\n"
-        "Hoi ve KPI, tien do, hieu suat team\n\n"
-        "Du bao:\n"
-        "Hoi ve deadline risk, forecast\n\n"
-        "Commands:\n"
-        "/mytasks — Xem tasks cua ban\n"
-        "/mytasks [ten] — Xem tasks cua nguoi khac\n"
-        "/onboarding — Bat dau onboarding\n"
-        "/next — Buoc tiep theo\n"
-        "/summary — Bao cao tong quan (PM/Admin)\n"
-        "/riskalert — Risk alert (PM/Admin)\n"
-        "/feedback [noi dung] — Gui feedback an danh\n"
+        "Hỏi về KPI, tiến độ, hiệu suất team\n\n"
+        "Dự báo:\n"
+        "Hỏi về deadline risk, forecast\n\n"
+        "Lệnh:\n"
+        "/mytasks — Xem tasks của bạn\n"
+        "/mytasks [tên] — Xem tasks của người khác\n"
+        "/onboarding — Bắt đầu onboarding\n"
+        "/next — Bước tiếp theo\n"
+        "/summary — Báo cáo tổng quan (PM/Admin)\n"
+        "/riskalert — Cảnh báo rủi ro (PM/Admin)\n"
+        "/feedback [nội dung] — Gửi feedback ẩn danh\n"
         "/viewfeedback — Xem feedback (Admin)\n"
-        "/adddoc [link] — Them Google Sheets/Docs (Admin)\n"
-        "/removedoc [link] — Xoa tai lieu (Admin)\n"
-        "/listdocs — Danh sach tai lieu (PM/Admin)\n"
-        "/resyncdocs — Sync lai tat ca (Admin)\n"
-        "/syncstatus — Trang thai sync (PM/Admin)\n"
-        "/myrole — Xem role cua ban\n"
-        "/setrole — Set role (Admin)\n"
-        "/join [code] — Tham gia cong ty"
+        "/adddoc [link] — Thêm Google Sheets/Docs (Admin)\n"
+        "/removedoc [link] — Xóa tài liệu (Admin)\n"
+        "/listdocs — Danh sách tài liệu (PM/Admin)\n"
+        "/resyncdocs — Sync lại tất cả (Admin)\n"
+        "/syncstatus — Trạng thái sync (PM/Admin)\n"
+        "/myrole — Xem role của bạn\n"
+        "/setrole — Đặt role (Admin)\n"
+        "/join [code] — Tham gia công ty"
     )
 
 
@@ -134,7 +134,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def onboarding_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user:
-        await update.message.reply_text("Go /start truoc nhe.")
+        await update.message.reply_text("Gõ /start trước nhé.")
         return
 
     zalo_id = str(update.effective_user.id)
@@ -175,13 +175,13 @@ async def my_tasks_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def add_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] != "admin":
-        await update.message.reply_text("Chi Admin moi them duoc tai lieu.")
+        await update.message.reply_text("Chỉ Admin mới thêm được tài liệu.")
         return
 
     if not context.args:
         await update.message.reply_text(
-            "Cu phap: /adddoc [link Google Sheets hoac Docs]\n"
-            "Nho share tai lieu cho service account truoc!"
+            "Cú pháp: /adddoc [link Google Sheets hoặc Docs]\n"
+            "Nhớ share tài liệu cho service account trước!"
         )
         return
 
@@ -197,12 +197,12 @@ async def add_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def remove_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] != "admin":
-        await update.message.reply_text("Chi Admin moi xoa duoc tai lieu.")
+        await update.message.reply_text("Chỉ Admin mới xóa được tài liệu.")
         return
 
     if not context.args:
         await update.message.reply_text(
-            "Cu phap: /removedoc [link Google Sheets hoac Docs]"
+            "Cú pháp: /removedoc [link Google Sheets hoặc Docs]"
         )
         return
 
@@ -216,7 +216,7 @@ async def remove_doc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chi Admin va PM moi xem duoc.")
+        await update.message.reply_text("Chỉ Admin và PM mới xem được.")
         return
 
     company_id = user.get("company_id", "pilot")
@@ -228,7 +228,7 @@ async def list_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def resync_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] != "admin":
-        await update.message.reply_text("Chi Admin moi sync duoc.")
+        await update.message.reply_text("Chỉ Admin mới sync được.")
         return
 
     company_id = user.get("company_id", "pilot")
@@ -240,7 +240,7 @@ async def resync_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def sync_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chi Admin va PM moi xem duoc.")
+        await update.message.reply_text("Chỉ Admin và PM mới xem được.")
         return
 
     company_id = user.get("company_id", "default")
@@ -253,22 +253,22 @@ async def sync_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not result.data:
-        await update.message.reply_text("Chua co tai lieu nao.")
+        await update.message.reply_text("Chưa có tài liệu nào.")
         return
 
-    lines = ["Trang thai sync:\n"]
+    lines = ["Trạng thái sync:\n"]
     for src in result.data:
         last_synced = src.get("last_synced")
         if last_synced:
             synced_str = last_synced[:16].replace("T", " ")
             status = f"OK {synced_str}"
         else:
-            status = "Chua sync"
+            status = "Chưa sync"
 
         title = src.get("title") or src.get("source_id", "")
         lines.append(f"{title}\n   {status}\n")
 
-    lines.append("Auto-sync moi gio 1 lan")
+    lines.append("Auto-sync mỗi giờ 1 lần")
     await update.message.reply_text("\n".join(lines))
 
 
@@ -276,8 +276,8 @@ async def sync_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def feedback_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(
-            "Cu phap: /feedback [noi dung feedback cua ban]\n"
-            "Feedback hoan toan an danh."
+            "Cú pháp: /feedback [nội dung feedback của bạn]\n"
+            "Feedback hoàn toàn ẩn danh."
         )
         return
 
@@ -288,17 +288,17 @@ async def feedback_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = submit_feedback(content, company_id)
     if success:
         await update.message.reply_text(
-            "Feedback cua ban da duoc gui an danh.\nCam on ban da dong gop!"
+            "Feedback của bạn đã được gửi ẩn danh.\nCảm ơn bạn đã đóng góp!"
         )
     else:
-        await update.message.reply_text("Loi khi gui feedback. Vui long thu lai.")
+        await update.message.reply_text("Lỗi khi gửi feedback. Vui lòng thử lại.")
 
 
 @_safe_handler
 async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] != "admin":
-        await update.message.reply_text("Chi Admin moi xem duoc feedback.")
+        await update.message.reply_text("Chỉ Admin mới xem được feedback.")
         return
 
     summary = get_feedback_summary(user.get("company_id", "pilot"))
@@ -309,7 +309,7 @@ async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chi Admin va PM moi xem duoc summary.")
+        await update.message.reply_text("Chỉ Admin và PM mới xem được summary.")
         return
 
     try:
@@ -317,14 +317,14 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(strip_markdown(answer))
     except Exception as e:
         logger.error(f"Zalo summary error: {e}")
-        await update.message.reply_text("Loi khi tao summary.")
+        await update.message.reply_text("Lỗi khi tạo summary.")
 
 
 @_safe_handler
 async def risk_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _get_zalo_user(update)
     if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chi Admin va PM moi dung duoc.")
+        await update.message.reply_text("Chỉ Admin và PM mới dùng được.")
         return
 
     try:
@@ -333,11 +333,11 @@ async def risk_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(strip_markdown(alert))
         else:
             await update.message.reply_text(
-                "Khong co rui ro nghiem trong nao. Moi thu dang on!"
+                "Không có rủi ro nghiêm trọng nào. Mọi thứ đang ổn!"
             )
     except Exception as e:
         logger.error(f"Zalo risk_alert error: {e}")
-        await update.message.reply_text("Loi khi tao risk alert.")
+        await update.message.reply_text("Lỗi khi tạo risk alert.")
 
 
 @_safe_handler
@@ -356,9 +356,9 @@ async def my_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
         role_label = {"admin": "Admin", "pm": "PM", "member": "Member"}.get(
             user["role"], user["role"]
         )
-        await update.message.reply_text(f"Role cua ban: {role_label.upper()}")
+        await update.message.reply_text(f"Role của bạn: {role_label.upper()}")
     else:
-        await update.message.reply_text("Ban chua dang ky. Go /start truoc nhe.")
+        await update.message.reply_text("Bạn chưa đăng ký. Gõ /start trước nhé.")
 
 
 @_safe_handler
@@ -373,14 +373,14 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not caller.data or caller.data[0]["role"] != "admin":
-        await update.message.reply_text("Chi admin moi dung duoc lenh nay.")
+        await update.message.reply_text("Chỉ admin mới dùng được lệnh này.")
         return
 
     args = context.args
     if not args or len(args) != 2:
         await update.message.reply_text(
-            "Cu phap: /setrole [username] [role]\n"
-            "Role hop le: admin, pm, member"
+            "Cú pháp: /setrole [username] [role]\n"
+            "Role hợp lệ: admin, pm, member"
         )
         return
 
@@ -388,7 +388,7 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_role = args[1].lower()
 
     if new_role not in {"admin", "pm", "member"}:
-        await update.message.reply_text("Role khong hop le. Chon: admin, pm, member")
+        await update.message.reply_text("Role không hợp lệ. Chọn: admin, pm, member")
         return
 
     result = (
@@ -399,9 +399,9 @@ async def set_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if result.data:
-        await update.message.reply_text(f"Da set {username} thanh {new_role}")
+        await update.message.reply_text(f"Đã set {username} thành {new_role}")
     else:
-        await update.message.reply_text(f"Khong tim thay {username}.")
+        await update.message.reply_text(f"Không tìm thấy {username}.")
 
 
 @_safe_handler
@@ -409,7 +409,7 @@ async def join_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from core.company import join_company_by_code_zalo
 
     if not context.args:
-        await update.message.reply_text("Cu phap: /join [invite code]")
+        await update.message.reply_text("Cú pháp: /join [invite code]")
         return
 
     zalo_id = str(update.effective_user.id)
@@ -426,7 +426,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user_by_zalo_id(zalo_id)
 
     if not user:
-        await update.message.reply_text("Ban chua dang ky. Go /start truoc nhe.")
+        await update.message.reply_text("Bạn chưa đăng ký. Gõ /start trước nhé.")
         return
 
     intent = detect_intent(text)
@@ -442,7 +442,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _handle_support(update, text, user, company_id)
     else:
         await update.message.reply_text(
-            "Toi chua hieu cau hoi. Ban co the hoi ro hon khong?"
+            "Tôi chưa hiểu câu hỏi. Bạn có thể hỏi rõ hơn không?"
         )
 
 
@@ -452,7 +452,7 @@ async def _handle_knowledge(update: Update, text: str, company_id: str):
         await update.message.reply_text(strip_markdown(answer))
     except Exception as e:
         logger.error(f"Zalo knowledge error: {e}")
-        await update.message.reply_text("Xin loi, toi gap loi khi tim kiem. Vui long thu lai.")
+        await update.message.reply_text("Xin lỗi, tôi gặp lỗi khi tìm kiếm. Vui lòng thử lại.")
 
 
 async def _handle_analytics(update: Update, text: str, company_id: str):
@@ -461,7 +461,7 @@ async def _handle_analytics(update: Update, text: str, company_id: str):
         await update.message.reply_text(strip_markdown(answer))
     except Exception as e:
         logger.error(f"Zalo analytics error: {e}")
-        await update.message.reply_text("Xin loi, toi gap loi khi phan tich. Vui long thu lai.")
+        await update.message.reply_text("Xin lỗi, tôi gặp lỗi khi phân tích. Vui lòng thử lại.")
 
 
 async def _handle_forecast(update: Update, text: str):
@@ -470,7 +470,7 @@ async def _handle_forecast(update: Update, text: str):
         await update.message.reply_text(strip_markdown(answer))
     except Exception as e:
         logger.error(f"Zalo forecast error: {e}")
-        await update.message.reply_text("Loi khi du bao. Vui long thu lai.")
+        await update.message.reply_text("Lỗi khi dự báo. Vui lòng thử lại.")
 
 
 async def _handle_support(update: Update, text: str, user: dict, company_id: str):
@@ -482,7 +482,6 @@ async def _handle_support(update: Update, text: str, user: dict, company_id: str
             await update.message.reply_text(strip_markdown(result))
         except Exception as e:
             logger.error(f"Zalo draft error: {e}")
-            await update.message.reply_text("Loi khi soan tai lieu.")
+            await update.message.reply_text("Lỗi khi soạn tài liệu.")
     else:
         await _handle_knowledge(update, text, company_id)
-

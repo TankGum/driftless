@@ -62,6 +62,8 @@ def read_pdf(file_id: str) -> list[dict]:
     chunks = []
     for i, page in enumerate(reader.pages):
         text = page.extract_text() or ""
+        # Remove null bytes and other control characters that PostgreSQL rejects
+        text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
         if text.strip():
             chunks.append(
                 {
