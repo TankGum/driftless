@@ -1,12 +1,11 @@
 from zalo_bot import Update
 from zalo_bot.ext import ContextTypes
 
-from analytics.analyzer import analyze_query, get_quick_summary
+from analytics.analyzer import analyze_query
 from core.auth import get_user_by_zalo_id
 from core.logger import logger
-from core.router import Intent, detect_intent
+from core.orchestrator import process as orchestrate
 from database.supabase import supabase
-from forecasting.responder import answer_forecast, get_risk_alert
 from knowledge.retriever import answer_question
 from knowledge.source_manager import (
     add_source,
@@ -14,14 +13,7 @@ from knowledge.source_manager import (
     list_sources,
     resync_all_sources,
 )
-from support.feedback import submit_feedback, get_feedback_summary
-from support.onboarding import (
-    init_onboarding_zalo,
-    get_current_step_content_zalo,
-    advance_onboarding_zalo,
-)
 from support.drafter import draft_document
-from support.task_helper import get_my_tasks, get_tasks_by_name
 from platforms.zalo.formatter import strip_markdown
 
 
@@ -111,14 +103,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Dự báo:\n"
         "Hỏi về deadline risk, forecast\n\n"
         "Lệnh:\n"
-        "/mytasks — Xem tasks của bạn\n"
-        "/mytasks [tên] — Xem tasks của người khác\n"
-        "/onboarding — Bắt đầu onboarding\n"
-        "/next — Bước tiếp theo\n"
-        "/summary — Báo cáo tổng quan (PM/Admin)\n"
-        "/riskalert — Cảnh báo rủi ro (PM/Admin)\n"
-        "/feedback [nội dung] — Gửi feedback ẩn danh\n"
-        "/viewfeedback — Xem feedback (Admin)\n"
         "/adddoc [link] — Thêm Google Sheets/Docs (Admin)\n"
         "/removedoc [link] — Xóa tài liệu (Admin)\n"
         "/listdocs — Danh sách tài liệu (PM/Admin)\n"
@@ -128,47 +112,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setrole — Đặt role (Admin)\n"
         "/join [code] — Tham gia công ty"
     )
-
-
-@_safe_handler
-async def onboarding_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user:
-        await update.message.reply_text("Gõ /start trước nhé.")
-        return
-
-    zalo_id = str(update.effective_user.id)
-    init_onboarding_zalo(zalo_id)
-    content, _ = get_current_step_content_zalo(
-        zalo_id, user.get("company_id", "pilot")
-    )
-    await update.message.reply_text(strip_markdown(content))
-
-
-@_safe_handler
-async def next_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user:
-        return
-
-    zalo_id = str(update.effective_user.id)
-    content, _ = advance_onboarding_zalo(zalo_id)
-    await update.message.reply_text(strip_markdown(content))
-
-
-@_safe_handler
-async def my_tasks_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user:
-        return
-
-    if context.args:
-        name = " ".join(context.args)
-        result = get_tasks_by_name(name)
-    else:
-        result = get_my_tasks(user)
-
-    await update.message.reply_text(strip_markdown(result))
 
 
 @_safe_handler
@@ -273,74 +216,6 @@ async def sync_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @_safe_handler
-async def feedback_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text(
-            "Cú pháp: /feedback [nội dung feedback của bạn]\n"
-            "Feedback hoàn toàn ẩn danh."
-        )
-        return
-
-    content = " ".join(context.args)
-    user = _get_zalo_user(update)
-    company_id = user.get("company_id", "pilot") if user else "pilot"
-
-    success = submit_feedback(content, company_id)
-    if success:
-        await update.message.reply_text(
-            "Feedback của bạn đã được gửi ẩn danh.\nCảm ơn bạn đã đóng góp!"
-        )
-    else:
-        await update.message.reply_text("Lỗi khi gửi feedback. Vui lòng thử lại.")
-
-
-@_safe_handler
-async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user or user["role"] != "admin":
-        await update.message.reply_text("Chỉ Admin mới xem được feedback.")
-        return
-
-    summary = get_feedback_summary(user.get("company_id", "pilot"))
-    await update.message.reply_text(strip_markdown(summary))
-
-
-@_safe_handler
-async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chỉ Admin và PM mới xem được summary.")
-        return
-
-    try:
-        answer = get_quick_summary()
-        await update.message.reply_text(strip_markdown(answer))
-    except Exception as e:
-        logger.error(f"Zalo summary error: {e}")
-        await update.message.reply_text("Lỗi khi tạo summary.")
-
-
-@_safe_handler
-async def risk_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = _get_zalo_user(update)
-    if not user or user["role"] not in {"admin", "pm"}:
-        await update.message.reply_text("Chỉ Admin và PM mới dùng được.")
-        return
-
-    try:
-        alert = get_risk_alert()
-        if alert:
-            await update.message.reply_text(strip_markdown(alert))
-        else:
-            await update.message.reply_text(
-                "Không có rủi ro nghiêm trọng nào. Mọi thứ đang ổn!"
-            )
-    except Exception as e:
-        logger.error(f"Zalo risk_alert error: {e}")
-        await update.message.reply_text("Lỗi khi tạo risk alert.")
-
-
-@_safe_handler
 async def my_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     zalo_id = str(update.effective_user.id)
 
@@ -429,21 +304,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Bạn chưa đăng ký. Gõ /start trước nhé.")
         return
 
-    intent = detect_intent(text)
     company_id = user.get("company_id", "pilot")
-
-    if intent == Intent.KNOWLEDGE_QUERY:
-        await _handle_knowledge(update, text, company_id)
-    elif intent == Intent.ANALYTICS_QUERY:
-        await _handle_analytics(update, text, company_id)
-    elif intent == Intent.FORECAST_QUERY:
-        await _handle_forecast(update, text)
-    elif intent == Intent.SUPPORT_REQUEST:
-        await _handle_support(update, text, user, company_id)
-    else:
-        await update.message.reply_text(
-            "Tôi chưa hiểu câu hỏi. Bạn có thể hỏi rõ hơn không?"
-        )
+    try:
+        answer = orchestrate(text, company_id, user)
+        await update.message.reply_text(strip_markdown(answer))
+    except Exception as e:
+        logger.error(f"Zalo orchestrator error: {e}")
+        await update.message.reply_text("Xin lỗi, tôi gặp lỗi. Vui lòng thử lại.")
 
 
 async def _handle_knowledge(update: Update, text: str, company_id: str):

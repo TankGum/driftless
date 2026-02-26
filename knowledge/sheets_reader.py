@@ -43,13 +43,25 @@ def get_sheet_title(sheet_id: str) -> str:
 
 
 def read_pdf(file_id: str) -> list[dict]:
-    """Đọc file PDF từ Google Drive, trả về list of dicts theo từng trang"""
+    """Đọc file PDF từ Google Drive.
+
+    Thử extract text trực tiếp bằng pypdf.
+    Nếu PDF là ảnh (không có text layer) → fallback sang Google Drive OCR.
+    """
     drive_service = get_drive_service()
 
-    file_meta = drive_service.files().get(fileId=file_id, fields="name").execute()
+    # supportsAllDrives=True cần thiết cho file trong Shared Drive (Team Drive)
+    file_meta = drive_service.files().get(
+        fileId=file_id,
+        fields="name",
+        supportsAllDrives=True,
+    ).execute()
     filename = file_meta.get("name", file_id)
 
-    request = drive_service.files().get_media(fileId=file_id)
+    request = drive_service.files().get_media(
+        fileId=file_id,
+        supportsAllDrives=True,
+    )
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
@@ -62,18 +74,99 @@ def read_pdf(file_id: str) -> list[dict]:
     chunks = []
     for i, page in enumerate(reader.pages):
         text = page.extract_text() or ""
-        # Remove null bytes and other control characters that PostgreSQL rejects
         text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
         if text.strip():
-            chunks.append(
-                {
-                    "_sheet_name": filename,
-                    "_heading": f"Trang {i + 1}",
-                    "_content": text,
-                    "_row_number": i,
-                }
-            )
+            chunks.append({
+                "_sheet_name": filename,
+                "_heading": f"Trang {i + 1}",
+                "_content": text,
+                "_row_number": i,
+            })
 
+    # PDF ảnh (scanned) → không có text layer → dùng Tesseract OCR
+    if not chunks:
+        print(f"  [OCR] PDF không có text layer, chuyển sang Tesseract OCR...")
+        chunks = _ocr_pdf_with_tesseract(buffer, filename)
+
+    return chunks
+
+
+def _ocr_pdf_with_tesseract(pdf_buffer: io.BytesIO, filename: str) -> list[dict]:
+    """OCR PDF ảnh bằng Tesseract (local, offline, miễn phí).
+
+    Dùng PyMuPDF để render từng trang thành ảnh PIL,
+    rồi pytesseract để extract text (hỗ trợ tiếng Việt).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        print("  [OCR] Cần cài pymupdf: pip install pymupdf")
+        return []
+
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        print("  [OCR] Cần cài pytesseract: pip install pytesseract")
+        print("  [OCR] Và cài Tesseract binary: https://github.com/UB-Mannheim/tesseract/wiki")
+        return []
+
+    from config import TESSERACT_CMD
+    if TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
+    pdf_buffer.seek(0)
+    pdf_bytes = pdf_buffer.read()
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as e:
+        print(f"  [OCR] Không mở được PDF: {e}")
+        return []
+
+    total_pages = len(doc)
+    print(f"  [OCR] Tổng {total_pages} trang, đang xử lý...")
+
+    chunks = []
+    for page_num in range(total_pages):
+        try:
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap(dpi=200)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+            try:
+                text = pytesseract.image_to_string(img, lang="vie+eng")
+            except pytesseract.TesseractError:
+                # Language pack vie chưa cài → fallback eng
+                print(f"  [OCR] Trang {page_num + 1}: lang 'vie' không có, dùng 'eng'")
+                text = pytesseract.image_to_string(img, lang="eng")
+
+            # Xóa null bytes và ký tự không in được
+            text = "".join(ch for ch in text if ch >= " " or ch in "\n\r\t")
+            text = text.strip()
+
+            if text:
+                chunks.append({
+                    "_sheet_name": filename,
+                    "_heading": f"Trang {page_num + 1}",
+                    "_content": text,
+                    "_row_number": page_num,
+                })
+                print(f"  [OCR] Trang {page_num + 1}: {len(text)} ký tự")
+
+        except pytesseract.TesseractNotFoundError:
+            print("  [OCR] Tesseract chưa được cài. Hướng dẫn cài:")
+            print("  [OCR]   1. Tải tại: https://github.com/UB-Mannheim/tesseract/wiki")
+            print("  [OCR]   2. Chọn bản tesseract-ocr-w64-setup-*.exe")
+            print("  [OCR]   3. Tick 'Vietnamese' ở phần Additional language data")
+            doc.close()
+            return []
+        except Exception as e:
+            print(f"  [OCR] Lỗi trang {page_num + 1}: {e}")
+            continue
+
+    doc.close()
+    print(f"  [OCR] Hoàn thành: {len(chunks)} trang có nội dung")
     return chunks
 
 

@@ -1,6 +1,5 @@
-import anthropic
-
 from database.supabase import supabase
+from knowledge.embedder import embed_documents_batch
 from knowledge.sheets_reader import (
     get_sheet_title,
     read_sheet,
@@ -10,24 +9,6 @@ from knowledge.sheets_reader import (
     read_pdf,
     pdf_to_text,
 )
-
-
-claude = anthropic.Anthropic()
-
-
-def get_embedding(text: str) -> list[float]:
-    """Dùng Claude để tạo embedding"""
-    response = claude.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=100,
-        messages=[
-            {
-                "role": "user",
-                "content": f"Summarize in 10 words: {text[:500]}",
-            }
-        ],
-    )
-    return None
 
 
 def detect_source_type(source_id: str) -> str:
@@ -40,7 +21,10 @@ def detect_source_type(source_id: str) -> str:
 
 
 def sync_source(source_id: str, company_id: str = "pilot"):
-    """Sync bất kỳ source nào — Sheets hoặc Docs"""
+    """Sync bất kỳ source nào — Sheets hoặc Docs.
+
+    Chỉ gọi Voyage AI khi nội dung thực sự thay đổi so với lần sync trước.
+    """
     source_type = detect_source_type(source_id)
     real_id = source_id.replace("pdf:", "").replace("doc:", "").replace("sheet:", "").strip()
 
@@ -79,17 +63,38 @@ def sync_source(source_id: str, company_id: str = "pilot"):
 
     doc_id = doc_result.data[0]["id"]
 
+    # So sánh với chunks đang có trong DB
+    existing = (
+        supabase.table("document_chunks")
+        .select("content, embedding")
+        .eq("document_id", doc_id)
+        .order("row_number")
+        .execute()
+    )
+    existing_contents = [r["content"] for r in existing.data]
+    existing_has_embeddings = existing.data and all(r.get("embedding") for r in existing.data)
+
+    if existing_contents == chunks and existing_has_embeddings:
+        print(f"⏭️  Không thay đổi, bỏ qua embedding: {title}")
+        return len(chunks)
+
+    # Nội dung mới hoặc chưa có embedding → embed lại
     supabase.table("document_chunks").delete().eq("document_id", doc_id).execute()
 
-    for i, chunk in enumerate(chunks):
-        supabase.table("document_chunks").insert(
-            {
-                "document_id": doc_id,
-                "content": chunk,
-                "row_number": i,
-                "metadata": {"source_id": real_id, "source_type": source_type},
-            }
-        ).execute()
+    print(f"Embedding {len(chunks)} chunks...")
+    embeddings = embed_documents_batch(chunks)
+
+    records = [
+        {
+            "document_id": doc_id,
+            "content": chunk,
+            "row_number": i,
+            "metadata": {"source_id": real_id, "source_type": source_type, "title": title},
+            "embedding": embedding,
+        }
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings))
+    ]
+    supabase.table("document_chunks").insert(records).execute()
 
     print(f"✅ Synced {len(chunks)} chunks from {source_type}: {title}")
     return len(chunks)

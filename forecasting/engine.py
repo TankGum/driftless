@@ -24,12 +24,11 @@ def parse_float_safe(value: str) -> float:
         return 0.0
 
 
-def forecast_deadline_risk() -> list[dict]:
+def forecast_deadline_risk(data: dict) -> list[dict]:
     """
     Dự báo task nào có nguy cơ trễ deadline.
     Logic: dựa trên completion % hiện tại vs thời gian còn lại
     """
-    data = load_all_data()
     tasks = data.get("project_progress", [])
     today = date.today()
     risks = []
@@ -57,17 +56,17 @@ def forecast_deadline_risk() -> list[dict]:
             gap = 0
 
         if days_remaining < 0:
-            risk_level = " OVERDUE"
+            risk_level = "OVERDUE"
         elif days_remaining <= 3 and completion < 80:
-            risk_level = " HIGH RISK"
+            risk_level = "HIGH RISK"
         elif days_remaining <= 7 and gap > 20:
-            risk_level = " MEDIUM RISK"
+            risk_level = "MEDIUM RISK"
         elif gap > 30:
-            risk_level = " MEDIUM RISK"
+            risk_level = "MEDIUM RISK"
         else:
-            risk_level = " ON TRACK"
+            risk_level = "ON TRACK"
 
-        if risk_level != " ON TRACK":
+        if risk_level != "ON TRACK":
             risks.append(
                 {
                     "task": task.get("Task Name", "Unknown"),
@@ -81,17 +80,16 @@ def forecast_deadline_risk() -> list[dict]:
                 }
             )
 
-    risk_order = {" OVERDUE": 0, " HIGH RISK": 1, " MEDIUM RISK": 2}
+    risk_order = {"OVERDUE": 0, "HIGH RISK": 1, "MEDIUM RISK": 2}
     risks.sort(key=lambda x: (risk_order.get(x["risk_level"], 3), x["days_remaining"]))
     return risks
 
 
-def forecast_kpi_miss() -> list[dict]:
+def forecast_kpi_miss(data: dict) -> list[dict]:
     """
     Dự báo KPI nào có nguy cơ miss target.
     Logic: dựa trên achievement % và trend
     """
-    data = load_all_data()
     kpis = data.get("kpi_tracking", [])
     at_risk = []
 
@@ -111,10 +109,10 @@ def forecast_kpi_miss() -> list[dict]:
             achievement = (current / target) * 100
 
         if achievement < 60:
-            risk_level = " HIGH RISK"
+            risk_level = "HIGH RISK"
             recommendation = "Cần action ngay, đang dưới 60% target"
         elif achievement < 80:
-            risk_level = " MEDIUM RISK"
+            risk_level = "MEDIUM RISK"
             recommendation = "Cần theo dõi sát, có nguy cơ miss target"
         else:
             continue
@@ -135,12 +133,11 @@ def forecast_kpi_miss() -> list[dict]:
     return at_risk
 
 
-def forecast_team_workload() -> list[dict]:
+def forecast_team_workload(data: dict) -> list[dict]:
     """
     Dự báo ai đang overload / underutilized.
     Logic: dựa trên assigned vs completed tasks và performance %
     """
-    data = load_all_data()
     members = data.get("team_performance", [])
     forecast = []
 
@@ -156,16 +153,16 @@ def forecast_team_workload() -> list[dict]:
         completion_rate = (completed / assigned * 100) if assigned > 0 else 0
 
         if performance < 60 or (pending > 5 and completion_rate < 50):
-            status = " OVERLOADED / AT RISK"
+            status = "OVERLOADED / AT RISK"
             recommendation = "Cân nhắc redistribute task hoặc support thêm"
         elif performance < 80:
-            status = " NEEDS ATTENTION"
+            status = "NEEDS ATTENTION"
             recommendation = "Theo dõi và check blockers"
         elif pending == 0:
-            status = " AVAILABLE"
+            status = "AVAILABLE"
             recommendation = "Có thể nhận thêm task"
         else:
-            status = " ON TRACK"
+            status = "ON TRACK"
             recommendation = "Đang ổn"
 
         forecast.append(
@@ -185,11 +182,12 @@ def forecast_team_workload() -> list[dict]:
     return forecast
 
 
-def get_full_forecast() -> dict:
+def get_full_forecast(company_id: str = "pilot") -> dict:
     """Tổng hợp toàn bộ forecast"""
+    data = load_all_data(company_id)
     return {
-        "deadline_risks": forecast_deadline_risk(),
-        "kpi_risks": forecast_kpi_miss(),
-        "workload": forecast_team_workload(),
+        "deadline_risks": forecast_deadline_risk(data),
+        "kpi_risks": forecast_kpi_miss(data),
+        "workload": forecast_team_workload(data),
         "generated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
     }

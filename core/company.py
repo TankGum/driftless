@@ -80,6 +80,33 @@ def join_company_by_code(telegram_id: int, code: str) -> tuple[bool, str]:
     return True, f"✅ Đã tham gia *{company['name']}*! Gõ /help để bắt đầu."
 
 
+def create_company_zalo(name: str, zalo_id: str) -> dict:
+    """Tạo company khi admin dùng Zalo."""
+    company_id = generate_company_id(name)
+
+    result = supabase.table("companies").insert(
+        {
+            "company_id": company_id,
+            "name": name,
+            "admin_telegram_id": 0,
+            "is_active": True,
+        }
+    ).execute()
+
+    existing = supabase.table("users").select("id").eq("zalo_id", zalo_id).execute()
+    if existing.data:
+        supabase.table("users").update(
+            {"company_id": company_id, "role": "admin"}
+        ).eq("zalo_id", zalo_id).execute()
+    else:
+        supabase.table("users").insert(
+            {"zalo_id": zalo_id, "company_id": company_id, "role": "admin"}
+        ).execute()
+
+    logger.info(f"Created company (Zalo admin): {name} ({company_id})")
+    return result.data[0] if result.data else None
+
+
 def get_user_company_by_zalo(zalo_id: str) -> str:
     from core.auth import get_user_by_zalo_id
 

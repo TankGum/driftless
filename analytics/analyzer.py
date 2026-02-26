@@ -6,10 +6,37 @@ from config import CLAUDE_API_KEY
 
 claude = Anthropic(api_key=CLAUDE_API_KEY)
 
+MAX_ROWS_PER_TAB = 200       # tối đa 200 dòng mỗi tab
+MAX_CONTEXT_CHARS = 80_000   # tối đa ~20k tokens input
+
+
+def _trim_data(data: dict) -> tuple[dict, list[str]]:
+    """Giới hạn số dòng mỗi tab và cảnh báo nếu bị cắt."""
+    warnings = []
+    trimmed_sheets = {}
+    for tab, rows in data.get("sheets", {}).items():
+        if len(rows) > MAX_ROWS_PER_TAB:
+            warnings.append(f"Tab '{tab}': hiển thị {MAX_ROWS_PER_TAB}/{len(rows)} dòng")
+            trimmed_sheets[tab] = rows[:MAX_ROWS_PER_TAB]
+        else:
+            trimmed_sheets[tab] = rows
+
+    trimmed = {**data, "sheets": trimmed_sheets}
+    for key in ("project_progress", "kpi_tracking", "team_performance"):
+        lst = trimmed.get(key, [])
+        if len(lst) > MAX_ROWS_PER_TAB:
+            warnings.append(f"'{key}': hiển thị {MAX_ROWS_PER_TAB}/{len(lst)} dòng")
+            trimmed[key] = lst[:MAX_ROWS_PER_TAB]
+    return trimmed, warnings
+
 
 def analyze_query(query: str, company_id: str = "pilot") -> str:
     """Phân tích câu hỏi analytics và trả lời dựa trên data thật"""
     data = load_all_data(company_id)
+
+    data, warnings = _trim_data(data)
+    if warnings:
+        print(f"  [Analytics] Giới hạn data: {'; '.join(warnings)}")
 
     other_sheets_context = []
     for tab_name, rows in data.get("sheets", {}).items():
@@ -21,6 +48,9 @@ def analyze_query(query: str, company_id: str = "pilot") -> str:
         other_sheets_context.append(f"=== {tab_name} ===\n{snippet}")
 
     data_context = json.dumps(data, ensure_ascii=False, indent=2)
+    if len(data_context) > MAX_CONTEXT_CHARS:
+        data_context = data_context[:MAX_CONTEXT_CHARS] + "\n... [DỮ LIỆU BỊ CẮT BỚT DO QUÁ DÀI]"
+        print(f"  [Analytics] data_context vượt {MAX_CONTEXT_CHARS} ký tự, đã truncate")
 
     response = claude.messages.create(
         model="claude-sonnet-4-6",

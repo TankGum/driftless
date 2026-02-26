@@ -13,7 +13,6 @@ from config import (
     SUPABASE_KEY,
     SUPABASE_URL,
     TELEGRAM_TOKEN,
-    ZALO_BOT_TOKEN,
 )
 from core.logger import logger
 from database.supabase import supabase
@@ -27,7 +26,7 @@ def check_env():
         "SUPABASE_KEY",
         "CLAUDE_API_KEY",
         "GOOGLE_CREDENTIALS_PATH",
-        "ZALO_BOT_TOKEN",
+        # ZALO_BOT_TOKEN là optional
     ]
 
     missing = [k for k in required if not os.getenv(k)]
@@ -125,6 +124,42 @@ def create_admin(telegram_id: int, username: str, company_name: str):
         return False
 
 
+def create_admin_zalo(zalo_id: str, username: str, company_name: str):
+    """Tạo admin account và company cho Zalo"""
+    from core.company import create_company_zalo
+
+    try:
+        existing = supabase.table("users").select("id").eq("zalo_id", zalo_id).execute()
+        if existing.data:
+            supabase.table("users").update(
+                {"username": username, "full_name": username, "role": "admin", "company_id": "default"}
+            ).eq("zalo_id", zalo_id).execute()
+        else:
+            supabase.table("users").insert(
+                {
+                    "zalo_id": zalo_id,
+                    "username": username,
+                    "full_name": username,
+                    "role": "admin",
+                    "company_id": "default",
+                }
+            ).execute()
+
+        company = create_company_zalo(company_name, zalo_id)
+
+        if company:
+            print(f"✅ Tạo company '{company_name}' thành công")
+            print(f"   Company ID: {company['company_id']}")
+            return True
+
+        print("❌ Lỗi tạo company. Vui lòng thử lại.")
+        return False
+
+    except Exception as e:
+        print(f"❌ Lỗi: {e}")
+        return False
+
+
 def run_setup():
     print("\n" + "=" * 50)
     print("  DRIFTLESS — Setup Script")
@@ -144,18 +179,53 @@ def run_setup():
 
     print("\n✅ Tất cả checks passed!\n")
 
-    print("Nhập thông tin admin:")
-    telegram_id = int(input("  Telegram ID của admin: "))
-    username = input("  Username Telegram (không có @): ")
-    company_name = input("  Tên công ty: ")
+    print("Công ty dùng platform nào?")
+    print("  [1] Telegram")
+    print("  [2] Zalo")
+    print("  [3] Cả hai (Telegram + Zalo)")
+    platform = input("Chọn (1/2/3): ").strip()
 
-    if create_admin(telegram_id, username, company_name):
+    company_name = input("  Tên công ty: ")
+    username = input("  Tên admin: ")
+
+    telegram_id = None
+    zalo_id = None
+
+    if platform in ("1", "3"):
+        telegram_id = int(input("  Telegram ID của admin (lấy từ @userinfobot): "))
+    if platform in ("2", "3"):
+        zalo_id = input("  Zalo User ID của admin: ").strip()
+
+    success = False
+
+    if platform == "1":
+        success = create_admin(telegram_id, username, company_name)
+
+    elif platform == "2":
+        success = create_admin_zalo(zalo_id, username, company_name)
+
+    elif platform == "3":
+        success = create_admin(telegram_id, username, company_name)
+        if success:
+            supabase.table("users").update(
+                {"zalo_id": zalo_id}
+            ).eq("telegram_id", telegram_id).execute()
+            print("✅ Đã gắn Zalo ID vào tài khoản admin")
+
+    else:
+        print("❌ Lựa chọn không hợp lệ.")
+        sys.exit(1)
+
+    if success:
         print("\n" + "=" * 50)
         print("  ✅ Setup hoàn thành!")
         print("=" * 50)
         print("\nBước tiếp theo:")
         print("1. Chạy: python main.py")
-        print("2. Mở Telegram, tìm bot và gõ /start")
+        if platform in ("1", "3"):
+            print("2. Mở Telegram, tìm bot và gõ /start")
+        if platform in ("2", "3"):
+            print("2. Mở Zalo, tìm bot và gửi 'start'")
         print("3. Dùng /adddoc để thêm tài liệu")
         print("4. Dùng /invite để tạo invite code cho team\n")
     else:

@@ -14,13 +14,6 @@ from platforms.telegram.handlers import (
     handle_message,
     my_role,
     set_role,
-    summary,
-    risk_alert,
-    onboarding,
-    next_step,
-    my_tasks,
-    feedback,
-    view_feedback,
     add_doc,
     remove_doc,
     list_docs,
@@ -61,13 +54,6 @@ def build_telegram_app():
     )
     app.add_handler(TelegramCommandHandler("myrole", my_role))
     app.add_handler(TelegramCommandHandler("setrole", set_role))
-    app.add_handler(TelegramCommandHandler("summary", summary))
-    app.add_handler(TelegramCommandHandler("riskalert", risk_alert))
-    app.add_handler(TelegramCommandHandler("onboarding", onboarding))
-    app.add_handler(TelegramCommandHandler("next", next_step))
-    app.add_handler(TelegramCommandHandler("mytasks", my_tasks))
-    app.add_handler(TelegramCommandHandler("feedback", feedback))
-    app.add_handler(TelegramCommandHandler("viewfeedback", view_feedback))
     app.add_handler(TelegramCommandHandler("adddoc", add_doc))
     app.add_handler(TelegramCommandHandler("removedoc", remove_doc))
     app.add_handler(TelegramCommandHandler("listdocs", list_docs))
@@ -96,13 +82,6 @@ def build_zalo_app():
         handle_message as zalo_handle_message,
         my_role as zalo_my_role,
         set_role as zalo_set_role,
-        summary as zalo_summary,
-        risk_alert as zalo_risk_alert,
-        onboarding_cmd as zalo_onboarding,
-        next_step as zalo_next_step,
-        my_tasks_cmd as zalo_my_tasks,
-        feedback_cmd as zalo_feedback,
-        view_feedback as zalo_view_feedback,
         add_doc as zalo_add_doc,
         remove_doc as zalo_remove_doc,
         list_docs as zalo_list_docs,
@@ -117,13 +96,6 @@ def build_zalo_app():
     app.add_handler(CommandHandler("help", zalo_help))
     app.add_handler(CommandHandler("myrole", zalo_my_role))
     app.add_handler(CommandHandler("setrole", zalo_set_role))
-    app.add_handler(CommandHandler("summary", zalo_summary))
-    app.add_handler(CommandHandler("riskalert", zalo_risk_alert))
-    app.add_handler(CommandHandler("onboarding", zalo_onboarding))
-    app.add_handler(CommandHandler("next", zalo_next_step))
-    app.add_handler(CommandHandler("mytasks", zalo_my_tasks))
-    app.add_handler(CommandHandler("feedback", zalo_feedback))
-    app.add_handler(CommandHandler("viewfeedback", zalo_view_feedback))
     app.add_handler(CommandHandler("adddoc", zalo_add_doc))
     app.add_handler(CommandHandler("removedoc", zalo_remove_doc))
     app.add_handler(CommandHandler("listdocs", zalo_list_docs))

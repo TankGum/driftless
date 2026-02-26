@@ -1,5 +1,10 @@
+import time
+
 from database.supabase import supabase
 from knowledge.sheets_reader import get_sheets_service
+
+_cache: dict[str, dict] = {}
+_CACHE_TTL = 300  # 5 phút
 
 
 def get_active_sheet_ids(company_id: str = "pilot") -> list[str]:
@@ -57,7 +62,19 @@ def load_team_performance(company_id: str = "pilot") -> list[dict]:
 
 
 def load_all_data(company_id: str = "pilot") -> dict:
-    """Load toàn bộ data từ tất cả sheets đang active"""
+    """Load toàn bộ data với TTL cache 5 phút để giảm API calls."""
+    now = time.time()
+    cached = _cache.get(company_id)
+    if cached and now - cached["ts"] < _CACHE_TTL:
+        return cached["data"]
+
+    data = _load_all_data_fresh(company_id)
+    _cache[company_id] = {"data": data, "ts": now}
+    return data
+
+
+def _load_all_data_fresh(company_id: str = "pilot") -> dict:
+    """Thực sự fetch data từ Google Sheets (không cache)."""
     service = get_sheets_service()
     sheet_ids = get_active_sheet_ids(company_id)
 

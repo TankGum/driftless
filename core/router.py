@@ -65,11 +65,8 @@ INTENT_KEYWORDS = {
     Intent.SUPPORT_REQUEST: [
         "giúp tôi",
         "hỗ trợ",
-        "onboarding",
-        "mới vào",
         "viết email",
         "draft",
-        "nhắc tôi",
     ],
 }
 

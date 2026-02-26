@@ -26,7 +26,10 @@ else:
             if src["source_type"] == "google_docs"
             else src["source_id"]
         )
-        total = sync_source(source_id, src["company_id"])
-        print(f"✅ {src['title'] or src['source_id']}: {total} chunks")
+        try:
+            total = sync_source(source_id, src["company_id"])
+            print(f"✅ {src['title'] or src['source_id']}: {total} chunks")
+        except Exception as e:
+            print(f"❌ Lỗi khi sync {src['source_id']}: {e}")
 
 print("\n✅ All sources synced!")

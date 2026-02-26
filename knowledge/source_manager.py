@@ -1,6 +1,18 @@
+import json
+
 from core.logger import logger
+from config import GOOGLE_CREDENTIALS_PATH
 from database.supabase import supabase
 from knowledge.indexer import sync_source
+
+
+def _service_account_email() -> str:
+    """Đọc email service account từ credentials.json để hiện trong thông báo lỗi."""
+    try:
+        with open(GOOGLE_CREDENTIALS_PATH) as f:
+            return json.load(f).get("client_email", "")
+    except Exception:
+        return ""
 
 
 def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bool, str]:
@@ -37,10 +49,22 @@ def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bo
         if chunks == 0:
             return False, "⚠️ Sync thành công nhưng không tìm thấy nội dung. Kiểm tra lại tài liệu."
     except Exception as e:
+        err = str(e)
+        hint = ""
+        if "403" in err:
+            sa_email = _service_account_email()
+            email_line = f"\nService account: `{sa_email}`" if sa_email else ""
+            hint = (
+                f"{email_line}\n\n"
+                "Kiểm tra:\n"
+                "1. Share tài liệu cho đúng email service account trên (Editor hoặc Viewer)\n"
+                "2. Nếu file trong Shared Drive: Share cả Drive hoặc bật 'Make available to everyone in this drive'\n"
+                "3. Đảm bảo Google Drive API đã được enable trong Google Cloud Console"
+            )
         return False, (
             f"❌ Không đọc được tài liệu.\n\n"
-            f"Lỗi: `{str(e)[:100]}`\n\n"
-            "Đảm bảo đã share tài liệu cho service account."
+            f"Lỗi: `{err[:120]}`"
+            f"{hint}"
         )
 
     supabase.table("data_sources").insert(

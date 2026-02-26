@@ -27,6 +27,8 @@ Requires a `.env` file with: `TELEGRAM_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `
 
 `ZALO_BOT_TOKEN` is optional — if absent, only Telegram runs.
 
+`TESSERACT_CMD` is optional — path to Tesseract binary. On Linux, pytesseract auto-detects `/usr/bin/tesseract`. On Windows, set this if Tesseract is not in PATH (e.g. `C:\Program Files\Tesseract-OCR\tesseract.exe`). Requires Tesseract binary + Vietnamese language pack installed on the OS.
+
 ## Architecture
 
 **Dual-platform design:** Both Telegram and Zalo bots call the same domain modules. `main.py` starts Telegram in the main thread (via `run_polling()`) and Zalo in a daemon thread. All domain logic is platform-agnostic.
@@ -41,11 +43,11 @@ Requires a `.env` file with: `TELEGRAM_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `
 
 - **`platforms/telegram/`** — Telegram-specific handlers. `handlers.py` uses `python-telegram-bot` (`Update`, `ContextTypes`), Markdown parse mode, and `@safe_handler`/`@admin_only`/`@pm_or_above` decorators.
 - **`platforms/zalo/`** — Zalo-specific handlers. `handlers.py` uses `python-zalo-bot` (same API pattern as python-telegram-bot). `formatter.py` strips Markdown to plain text (Zalo does not support Markdown). Zalo commands use text-prefix matching; Zalo-specific user identity is stored in `zalo_id` column.
-- **`knowledge/`** — RAG pipeline over company documents. `source_manager.py` handles CRUD for data sources (Google Sheets/Docs URLs). `indexer.py` syncs documents into `document_chunks` in Supabase. `retriever.py` uses Claude Haiku to rank chunks by relevance, then Claude Sonnet to generate answers. `sheets_reader.py` reads Google Sheets and Docs via the Google API.
-- **`analytics/`** — `data_loader.py` reads live data from all active Google Sheets (matching tab names like "Project Progress", "KPI Tracking", "Team Performance"). `analyzer.py` sends the raw data to Claude Sonnet to answer analytics questions.
-- **`forecasting/`** — `engine.py` computes deadline risk, KPI miss risk, and team workload forecasts using rule-based logic on sheet data. `responder.py` wraps forecast data with Claude Sonnet for natural language answers.
-- **`support/`** — `onboarding.py` (step-based onboarding; Telegram variant uses `telegram_id`, Zalo variant uses `zalo_id` via `*_zalo()` functions), `drafter.py` (AI document drafting), `feedback.py` (anonymous feedback with AI categorization), `task_helper.py` (task lookup by owner name).
-- **`core/`** — `auth.py` (user lookup by `telegram_id` or `zalo_id`), `decorators.py` (`@safe_handler`, `@admin_only`, `@pm_or_above` — Telegram-only), `router.py` (intent detection, platform-agnostic), `company.py` (multi-tenant company management with invite codes; Zalo variant `join_company_by_code_zalo()`), `error_handler.py`, `logger.py`.
+- **`knowledge/`** — RAG pipeline over company documents. `source_manager.py` handles CRUD for data sources (Google Sheets/Docs URLs). `indexer.py` syncs documents into `document_chunks` in Supabase. `retriever.py` uses Claude Haiku to rank chunks by relevance, then Claude Sonnet to generate answers. `sheets_reader.py` reads Google Sheets, Docs, and PDFs via the Google API. `embedder.py` generates embeddings using fastembed (local multilingual model). For scanned/image PDFs, `sheets_reader.py` uses Tesseract OCR (PyMuPDF renders pages → pytesseract extracts text, supports Vietnamese).
+- **`analytics/`** — `data_loader.py` reads live data from all active Google Sheets (matching tab names like "Project Progress", "KPI Tracking", "Team Performance"). `analyzer.py` sends the raw data to Claude Sonnet to answer analytics questions. **Token safety:** input capped at 200 rows/tab and 80k chars total to prevent cost explosion on large sheets.
+- **`forecasting/`** — `engine.py` computes deadline risk, KPI miss risk, and team workload forecasts using rule-based logic on sheet data. `responder.py` wraps forecast data with Claude Sonnet for natural language answers. **Token safety:** input capped at 50 items/category and 30k chars total.
+- **`support/`** — `drafter.py` (AI document drafting).
+- **`core/`** — `auth.py` (user lookup by `telegram_id` or `zalo_id`), `decorators.py` (`@safe_handler`, `@admin_only`, `@pm_or_above` — Telegram-only), `router.py` (intent detection, platform-agnostic), `company.py` (multi-tenant company management with invite codes; Zalo variant `join_company_by_code_zalo()`), `orchestrator.py` (central orchestrator), `error_handler.py`, `logger.py`.
 - **`jobs/auto_sync.py`** — Hourly auto-sync of all document sources across all active companies via Telegram's job queue.
 
 **Multi-tenancy:** Each company has a `company_id`. Users belong to a company. Data sources, documents, and feedbacks are scoped by `company_id`. The default/fallback is `"pilot"`.
@@ -64,8 +66,8 @@ Requires a `.env` file with: `TELEGRAM_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`, `
 
 - All user-facing text is in Vietnamese. Zalo responses use plain Vietnamese (no diacritics in some places due to Zalo plain-text limitation).
 - Telegram messages use Markdown parse mode. Zalo messages are plain text — always pass through `zalo.formatter.strip_markdown()` before sending.
-- Google Sheets/Docs are the primary external data sources; the bot reads them via a service account.
+- Google Sheets/Docs/PDFs are the primary external data sources; the bot reads them via a service account. Scanned PDFs use Tesseract OCR.
 - No ORM — direct Supabase client calls (`supabase.table(...).select/insert/update/delete`).
-- Domain modules (`knowledge/`, `analytics/`, `forecasting/`, `support/drafter.py`, `support/feedback.py`, `support/task_helper.py`) are fully platform-agnostic — they take plain `str`/`dict` and return plain `str`. Never add Telegram or Zalo imports to these modules.
+- Domain modules (`knowledge/`, `analytics/`, `forecasting/`, `support/drafter.py`) are fully platform-agnostic — they take plain `str`/`dict` and return plain `str`. Never add Telegram or Zalo imports to these modules.
 
 
