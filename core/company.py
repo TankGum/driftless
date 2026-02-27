@@ -23,14 +23,15 @@ def create_company(name: str, admin_telegram_id: int) -> dict:
         }
     ).execute()
 
-    supabase.table("users").upsert(
-        {
-            "telegram_id": admin_telegram_id,
-            "company_id": company_id,
-            "role": "admin",
-        },
-        on_conflict="telegram_id",
-    ).execute()
+    existing = supabase.table("users").select("id").eq("telegram_id", admin_telegram_id).execute()
+    if existing.data:
+        supabase.table("users").update(
+            {"company_id": company_id, "role": "admin"}
+        ).eq("telegram_id", admin_telegram_id).execute()
+    else:
+        supabase.table("users").insert(
+            {"telegram_id": admin_telegram_id, "company_id": company_id, "role": "admin"}
+        ).execute()
 
     logger.info(f"Created company: {name} ({company_id})")
     return result.data[0] if result.data else None

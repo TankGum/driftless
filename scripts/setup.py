@@ -1,11 +1,17 @@
+import getpass
 import os
 import sys
 
 sys.path.append(".")
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 load_dotenv()
+
+
+def _hash_password(plain: str) -> str:
+    import bcrypt
+    return bcrypt.hashpw(plain.encode("utf-8")[:72], bcrypt.gensalt()).decode("utf-8")
 
 from config import (
     CLAUDE_API_KEY,
@@ -82,57 +88,65 @@ def check_tables():
     return True
 
 
-def create_admin(telegram_id: int, username: str, company_name: str):
-    """Tạo admin account và company"""
+def create_admin(telegram_id: int, username: str, company_name: str, password_hash: str):
+    """Tạo admin account và company. Nếu admin đã có company thì dùng lại."""
     from core.company import create_company
 
     try:
-        supabase.table("users").upsert(
-            {
-                "telegram_id": telegram_id,
-                "username": username,
-                "full_name": username,
-                "role": "admin",
-                "company_id": "default",
-            },
-            on_conflict="telegram_id",
-        ).execute()
+        # Kiểm tra user đã có company chưa
+        existing = supabase.table("users").select("company_id").eq("telegram_id", telegram_id).execute()
+        if existing.data:
+            existing_company_id = existing.data[0].get("company_id")
+            if existing_company_id and existing_company_id not in ("default", "pilot", None):
+                print(f"ℹ️  Admin đã thuộc company: {existing_company_id} — dùng lại, không tạo mới.")
+                return existing_company_id
+
+        if existing.data:
+            # User tồn tại nhưng chưa có company hợp lệ → update info
+            supabase.table("users").update(
+                {"username": username, "full_name": username, "role": "admin", "password_hash": password_hash}
+            ).eq("telegram_id", telegram_id).execute()
+        else:
+            supabase.table("users").insert(
+                {
+                    "telegram_id": telegram_id,
+                    "username": username,
+                    "full_name": username,
+                    "role": "admin",
+                    "password_hash": password_hash,
+                }
+            ).execute()
 
         company = create_company(company_name, telegram_id)
 
         if company:
             print(f"✅ Tạo company '{company_name}' thành công")
             print(f"   Company ID: {company['company_id']}")
-            return True
+            return company["company_id"]
 
         print("❌ Lỗi tạo company. Vui lòng thử lại.")
-        return False
+        return None
 
     except Exception as e:
-        error = str(e)
-        if "duplicate key" in error:
-            print("⚠️  Telegram ID này đã tồn tại — đang update thông tin...")
-            company = create_company(company_name, telegram_id)
-            if company:
-                print(f"✅ Cập nhật thành công! Company: '{company_name}'")
-                return True
-        elif "company_id" in error:
-            print("❌ Thiếu cột company_id trong bảng users.")
-            print("   Chạy SQL: alter table users add column if not exists company_id text default 'default';")
-        else:
-            print(f"❌ Lỗi không xác định: {error}")
-        return False
+        print(f"❌ Lỗi không xác định: {e}")
+        return None
 
 
-def create_admin_zalo(zalo_id: str, username: str, company_name: str):
-    """Tạo admin account và company cho Zalo"""
+def create_admin_zalo(zalo_id: str, username: str, company_name: str, password_hash: str):
+    """Tạo admin account và company cho Zalo. Nếu admin đã có company thì dùng lại."""
     from core.company import create_company_zalo
 
     try:
-        existing = supabase.table("users").select("id").eq("zalo_id", zalo_id).execute()
+        # Kiểm tra user đã có company chưa
+        existing = supabase.table("users").select("company_id").eq("zalo_id", zalo_id).execute()
         if existing.data:
+            existing_company_id = existing.data[0].get("company_id")
+            if existing_company_id and existing_company_id not in ("default", "pilot", None):
+                print(f"ℹ️  Admin đã thuộc company: {existing_company_id} — dùng lại, không tạo mới.")
+                return existing_company_id
+            # User tồn tại nhưng chưa có company hợp lệ → update info
             supabase.table("users").update(
-                {"username": username, "full_name": username, "role": "admin", "company_id": "default"}
+                {"username": username, "full_name": username, "role": "admin", "password_hash": password_hash}
             ).eq("zalo_id", zalo_id).execute()
         else:
             supabase.table("users").insert(
@@ -141,7 +155,7 @@ def create_admin_zalo(zalo_id: str, username: str, company_name: str):
                     "username": username,
                     "full_name": username,
                     "role": "admin",
-                    "company_id": "default",
+                    "password_hash": password_hash,
                 }
             ).execute()
 
@@ -150,14 +164,14 @@ def create_admin_zalo(zalo_id: str, username: str, company_name: str):
         if company:
             print(f"✅ Tạo company '{company_name}' thành công")
             print(f"   Company ID: {company['company_id']}")
-            return True
+            return company["company_id"]
 
         print("❌ Lỗi tạo company. Vui lòng thử lại.")
-        return False
+        return None
 
     except Exception as e:
         print(f"❌ Lỗi: {e}")
-        return False
+        return None
 
 
 def run_setup():
@@ -188,6 +202,12 @@ def run_setup():
     company_name = input("  Tên công ty: ")
     username = input("  Tên admin: ")
 
+    webui_password = getpass.getpass("  Mật khẩu WebUI của admin (≥6 ký tự): ")
+    while len(webui_password) < 6:
+        print("  Mật khẩu phải có ít nhất 6 ký tự.")
+        webui_password = getpass.getpass("  Mật khẩu WebUI của admin: ")
+    password_hash = _hash_password(webui_password)
+
     telegram_id = None
     zalo_id = None
 
@@ -196,17 +216,17 @@ def run_setup():
     if platform in ("2", "3"):
         zalo_id = input("  Zalo User ID của admin: ").strip()
 
-    success = False
+    company_id = None
 
     if platform == "1":
-        success = create_admin(telegram_id, username, company_name)
+        company_id = create_admin(telegram_id, username, company_name, password_hash)
 
     elif platform == "2":
-        success = create_admin_zalo(zalo_id, username, company_name)
+        company_id = create_admin_zalo(zalo_id, username, company_name, password_hash)
 
     elif platform == "3":
-        success = create_admin(telegram_id, username, company_name)
-        if success:
+        company_id = create_admin(telegram_id, username, company_name, password_hash)
+        if company_id:
             supabase.table("users").update(
                 {"zalo_id": zalo_id}
             ).eq("telegram_id", telegram_id).execute()
@@ -216,7 +236,12 @@ def run_setup():
         print("❌ Lựa chọn không hợp lệ.")
         sys.exit(1)
 
-    if success:
+    if company_id:
+        # Tự động ghi DEFAULT_COMPANY_ID vào .env
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+        set_key(env_path, "DEFAULT_COMPANY_ID", company_id)
+        print(f"✅ Đã ghi DEFAULT_COMPANY_ID={company_id} vào .env")
+
         print("\n" + "=" * 50)
         print("  ✅ Setup hoàn thành!")
         print("=" * 50)

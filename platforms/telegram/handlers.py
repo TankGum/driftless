@@ -19,6 +19,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"start command invoked by {telegram_id}")
 
+    # Auto-assign company_id: dùng company duy nhất active (bỏ qua "default")
+    active_companies = (
+        supabase.table("companies")
+        .select("company_id")
+        .eq("is_active", True)
+        .neq("company_id", "default")
+        .execute()
+    )
+    auto_company_id = (
+        active_companies.data[0]["company_id"]
+        if len(active_companies.data) == 1
+        else "default"
+    )
+
     existing = (
         supabase.table("users")
         .select("*")
@@ -33,6 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "username": user.username,
                 "full_name": user.full_name,
                 "role": "member",
+                "company_id": auto_company_id,
             }
         ).execute()
 
@@ -43,6 +58,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Gõ /help để xem các lệnh có sẵn."
         )
     else:
+        # Nếu user cũ chưa có company_id hợp lệ → update
+        current_company = existing.data[0].get("company_id")
+        if current_company in (None, "default", "pilot") and auto_company_id != "default":
+            supabase.table("users").update(
+                {"company_id": auto_company_id}
+            ).eq("telegram_id", telegram_id).execute()
+
         await update.message.reply_text(
             f"Chào lại {user.first_name}! Tôi có thể giúp gì cho bạn?"
         )
