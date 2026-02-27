@@ -42,3 +42,13 @@ async def run_auto_sync_apscheduler() -> None:
 async def run_auto_sync(context) -> None:
     """Legacy Telegram job_queue callback — kept for compatibility."""
     _sync_all()
+
+
+async def run_chat_cleanup_apscheduler() -> None:
+    """APScheduler daily job — xóa chat sessions không pin cũ hơn CHAT_SESSION_RETENTION_DAYS."""
+    from core.chat_history import cleanup_old_sessions
+    try:
+        deleted = cleanup_old_sessions()
+        logger.info(f"Chat cleanup: đã xóa {deleted} sessions cũ.")
+    except Exception as e:
+        logger.error(f"Chat cleanup failed: {e}")

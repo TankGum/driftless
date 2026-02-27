@@ -23,6 +23,10 @@ BASE_URL = os.getenv("BASE_URL", "")  # e.g. https://your-domain.com
 CHAINLIT_ADMIN_PASSWORD = os.getenv("CHAINLIT_ADMIN_PASSWORD", "driftless2024")
 DEFAULT_COMPANY_ID = os.getenv("DEFAULT_COMPANY_ID", "pilot")
 
+# Chat history
+CHAT_HISTORY_MAX_TURNS = int(os.getenv("CHAT_HISTORY_MAX_TURNS", "10"))
+CHAT_SESSION_RETENTION_DAYS = int(os.getenv("CHAT_SESSION_RETENTION_DAYS", "7"))
+
 # LangSmith monitoring (optional — set LANGCHAIN_TRACING_V2=true to enable)
 # LANGCHAIN_TRACING_V2=true
 # LANGCHAIN_API_KEY=<your_langsmith_key>

@@ -4,45 +4,25 @@ LangChain 1.x đã remove AgentExecutor. Dùng bind_tools() + manual loop thay t
 LangSmith traces tự động khi LANGCHAIN_TRACING_V2=true trong .env.
 API công khai: process(query, company_id, user) -> str — không thay đổi.
 """
-import time
 from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 
 from config import CLAUDE_API_KEY
 from core.logger import logger
+from core.chat_history import load_history, save_exchange
 
-# ── Session memory ────────────────────────────────────────────────────────────
-_sessions: dict[str, dict] = {}
-_SESSION_TTL = 1800   # 30 min idle → clear
-_MAX_HISTORY = 5
 MAX_TURNS = 5
 
 
 def _user_key(user: dict) -> str:
-    return str(user.get("telegram_id") or user.get("zalo_id") or "")
-
-
-def _get_history(user_key: str) -> list:
-    if not user_key:
-        return []
-    session = _sessions.get(user_key)
-    if not session:
-        return []
-    if time.time() - session["last_active"] > _SESSION_TTL:
-        _sessions.pop(user_key, None)
-        return []
-    return list(session["messages"])
-
-
-def _save_history(user_key: str, query: str, answer: str) -> None:
-    if not user_key:
-        return
-    existing = list(_sessions.get(user_key, {}).get("messages", []))
-    keep = (_MAX_HISTORY - 1) * 2
-    trimmed = existing[-keep:] if len(existing) > keep else existing
-    trimmed += [HumanMessage(content=query), AIMessage(content=answer)]
-    _sessions[user_key] = {"messages": trimmed, "last_active": time.time()}
+    if user.get("telegram_id"):
+        return f"telegram:{user['telegram_id']}"
+    if user.get("zalo_id"):
+        return f"zalo:{user['zalo_id']}"
+    if user.get("username"):
+        return f"chainlit:{user['username']}"
+    return ""
 
 
 # ── LangChain Tools ───────────────────────────────────────────────────────────
@@ -155,13 +135,19 @@ Chọn tool:
 def process(query: str, company_id: str, user: dict) -> str:
     """Entry point cho free-text messages — giữ nguyên signature cũ."""
     user_key = _user_key(user)
-    history = _get_history(user_key)
+    platform = "telegram" if user.get("telegram_id") else "zalo" if user.get("zalo_id") else "chainlit"
+
+    history = load_history(company_id, user_key)
+    lc_history = [
+        HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
+        for m in history
+    ]
 
     try:
-        answer = _run_react_loop(query, company_id, user, history)
+        answer = _run_react_loop(query, company_id, user, lc_history)
         if not answer:
             raise ValueError("Empty response")
-        _save_history(user_key, query, answer)
+        save_exchange(company_id, user_key, platform, query, answer)
         return answer
     except Exception as e:
         logger.error(f"Orchestrator error: {e}", exc_info=True)
@@ -171,5 +157,5 @@ def process(query: str, company_id: str, user: dict) -> str:
         except Exception:
             from knowledge.retriever import answer_question
             answer = answer_question(query, company_id)
-        _save_history(user_key, query, answer)
+        save_exchange(company_id, user_key, platform, query, answer)
         return answer

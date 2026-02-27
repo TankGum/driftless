@@ -11,7 +11,7 @@ from core.logger import logger
 def _start_scheduler():
     """Start APScheduler for hourly auto-sync (replaces Telegram job_queue)."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from jobs.auto_sync import run_auto_sync_apscheduler
+    from jobs.auto_sync import run_auto_sync_apscheduler, run_chat_cleanup_apscheduler
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
@@ -21,8 +21,16 @@ def _start_scheduler():
         id="auto_sync",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_chat_cleanup_apscheduler,
+        trigger="cron",
+        hour=3, minute=0,
+        id="chat_cleanup",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info("APScheduler: auto-sync scheduled every 1 hour")
+    logger.info("APScheduler: chat session cleanup scheduled daily at 03:00")
     return scheduler
 
 

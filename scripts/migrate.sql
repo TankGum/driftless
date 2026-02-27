@@ -112,6 +112,44 @@ CREATE INDEX IF NOT EXISTS idx_chunks_fts
   ON document_chunks USING GIN(fts_content);
 
 -- ============================================
+-- CHAT MESSAGES (persistent history)
+-- ============================================
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id          bigserial   PRIMARY KEY,
+  company_id  text        NOT NULL,
+  user_key    text        NOT NULL,
+  platform    text        NOT NULL,  -- 'telegram', 'zalo', 'chainlit'
+  role        text        NOT NULL,  -- 'user' or 'assistant'
+  content     text        NOT NULL,
+  created_at  timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_lookup
+  ON chat_messages(company_id, user_key, created_at DESC);
+
+-- Add platform column to existing deployments (no-op on fresh installs)
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS platform text;
+
+-- ============================================
+-- CHAT SESSIONS (Chainlit WebUI only)
+-- ============================================
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id  text        NOT NULL,
+  user_key    text        NOT NULL,
+  title       text,               -- auto-set từ tin nhắn đầu (50 chars)
+  is_pinned   boolean     DEFAULT false,
+  created_at  timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_lookup
+  ON chat_sessions(company_id, user_key, is_pinned DESC, created_at DESC);
+
+-- Add session_id to chat_messages (NULL = legacy messages from Telegram/Zalo)
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id uuid
+  REFERENCES chat_sessions(id) ON DELETE CASCADE;
+
+-- ============================================
 -- KEYWORD SEARCH RPC FUNCTION
 -- Used by pipeline/rag_chain.py for BM25-style retrieval
 -- ============================================

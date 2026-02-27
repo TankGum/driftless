@@ -9,7 +9,7 @@ Pipeline steps:
   6. Generate answer (Claude Sonnet, streaming-compatible)
   7. Format response with citations
 
-Input schema:  {"query": str, "company_id": str}
+Input schema:  {"query": str, "company_id": str, "chat_history": list[dict]}
 Output schema: str (answer with citations)
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from config import CLAUDE_API_KEY
 
 def _rewrite(inputs: dict) -> dict:
     """Step 1: Rewrite query for better retrieval."""
-    rewritten = rewrite_query(inputs["query"])
+    rewritten = rewrite_query(inputs["query"], inputs.get("chat_history", []))
     return {**inputs, "rewritten_query": rewritten}
 
 
@@ -124,6 +124,7 @@ def _generate(inputs: dict) -> dict:
 
     chunks = inputs["ranked_chunks"]
     query = inputs["query"]  # Use ORIGINAL query for generation
+    chat_history = inputs.get("chat_history", [])
 
     # Build context with numbered source labels
     context_parts = []
@@ -133,6 +134,9 @@ def _generate(inputs: dict) -> dict:
             label += f" {chunk['title']}"
         context_parts.append(f"{label}\n{chunk['content']}")
     context = "\n\n---\n\n".join(context_parts)
+
+    user_content = f"Tài liệu công ty:\n{context}\n\nCâu hỏi: {query}"
+    messages = list(chat_history) + [{"role": "user", "content": user_content}]
 
     try:
         response = client.messages.create(
@@ -148,10 +152,7 @@ Quy tắc bắt buộc:
 - Nếu tài liệu không đủ thông tin → nói rõ và gợi ý hỏi ai
 - Viết bằng tiếng Việt, thân thiện như đồng nghiệp
 - KHÔNG bịa hoặc suy đoán thông tin ngoài tài liệu""",
-            messages=[{
-                "role": "user",
-                "content": f"Tài liệu công ty:\n{context}\n\nCâu hỏi: {query}",
-            }],
+            messages=messages,
         )
         answer = response.content[0].text
     except Exception as e:
@@ -186,6 +187,6 @@ rag_chain = (
 ).with_config({"run_name": "driftless_rag"})
 
 
-def answer_with_rag(query: str, company_id: str) -> str:
+def answer_with_rag(query: str, company_id: str, chat_history: list[dict] | None = None) -> str:
     """Convenience wrapper — synchronous call to the full RAG chain."""
-    return rag_chain.invoke({"query": query, "company_id": company_id})
+    return rag_chain.invoke({"query": query, "company_id": company_id, "chat_history": chat_history or []})
