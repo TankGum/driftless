@@ -6,6 +6,10 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+PORTAL_URL = os.getenv("PORTAL_URL", "")
+PORTAL_API_KEY = os.getenv("PORTAL_API_KEY", "")
+TENANT_ID = int(os.getenv("TENANT_ID", "0"))
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH")
 

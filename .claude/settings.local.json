@@ -27,7 +27,15 @@
       "Bash(cd /d/Workspace/Driftless && .venv/Scripts/pip install pytesseract 2>&1)",
       "Bash(.venv/Scripts/python:*)",
       "Bash(.venv/Scripts/pip install:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(nginx:*)",
+      "Bash(lsof:*)",
+      "Bash(docker images:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker port:*)",
+      "Bash(docker:*)",
+      "Bash(source:*)"
     ]
   }
 }

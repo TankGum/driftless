@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import chat, upload, admin
+from api.routers import chat, upload, admin, provision
 from core.logger import logger
 
 
@@ -120,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router)
     app.include_router(upload.router)
     app.include_router(admin.router)
+    app.include_router(provision.router)
 
     # Platform: polling mode + keep webhook routes (not registered with Telegram/Zalo, harmless)
     from config import TELEGRAM_TOKEN, ZALO_BOT_TOKEN

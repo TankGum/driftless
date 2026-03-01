@@ -22,6 +22,20 @@ CREATE TABLE IF NOT EXISTS companies (
 
 CREATE INDEX IF NOT EXISTS idx_companies_company_id ON companies(company_id);
 
+-- Plan & trial management
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'trial';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_query_count INT DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMPTZ;
+
+-- Container & infrastructure info
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS subdomain TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS container_name TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS container_port INT;
+
+-- Usage tracking (for Pro billing reference)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS token_usage_total BIGINT DEFAULT 0;
+
 -- ============================================
 -- USERS (multi-platform identity)
 -- ============================================

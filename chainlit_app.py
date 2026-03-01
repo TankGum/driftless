@@ -6,7 +6,7 @@ Or mounted:      python main.py (FastAPI mounts Chainlit at /)
 import asyncio
 import os
 import tempfile
-import bcrypt
+import httpx
 import chainlit as cl
 
 from pipeline.rag_chain import rag_chain, NO_INFO_MESSAGE
@@ -28,50 +28,58 @@ def get_data_layer():
     return DriftlessDataLayer()
 
 
-def _hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode("utf-8")[:72], bcrypt.gensalt()).decode("utf-8")
-
-
-def _verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8")[:72], hashed.encode("utf-8"))
-
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
-    """Xác thực qua username + mật khẩu bcrypt trong Supabase."""
-    from database.supabase import supabase
-    from config import DEFAULT_COMPANY_ID
+    """Authenticate via driftless portal email + password."""
+    from config import PORTAL_URL, TENANT_ID
 
-    company_id = DEFAULT_COMPANY_ID or "pilot"
+    if not PORTAL_URL or not TENANT_ID:
+        return None
 
     try:
-        result = (
-            supabase.table("users")
-            .select("id, username, full_name, role, company_id, password_hash")
-            .eq("username", username)
-            .eq("company_id", company_id)
-            .single()
-            .execute()
+        resp = httpx.post(
+            f"{PORTAL_URL}/api/v1/auth/login",
+            json={"email": username, "password": password},
+            timeout=10.0,
         )
-    except Exception:
-        return None  # 0 hoặc >1 kết quả → từ chối
+    except httpx.RequestError:
+        return None
 
-    user_row = result.data if result and result.data else None
-    if not user_row or not user_row.get("password_hash"):
-        return None  # Tài khoản chưa được cấp mật khẩu WebUI
+    if resp.status_code != 200:
+        return None
 
-    if not _verify_password(password, user_row["password_hash"]):
+    data = resp.json()
+    access_token = data.get("tokens", {}).get("access_token")
+    user_info = data.get("user", {})
+    if not access_token:
+        return None
+
+    try:
+        tenant_resp = httpx.get(
+            f"{PORTAL_URL}/api/v1/tenants/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10.0,
+        )
+    except httpx.RequestError:
+        return None
+
+    if tenant_resp.status_code != 200:
+        return None
+
+    tenant = tenant_resp.json()
+    if tenant is None or tenant.get("id") != TENANT_ID:
         return None
 
     return cl.User(
-        identifier=user_row["username"],
+        identifier=user_info.get("email", username),
         metadata={
-            "role": user_row.get("role", "member"),
-            "company_id": user_row.get("company_id", company_id),
-            "full_name": user_row.get("full_name") or user_row["username"],
-            "provider": "credentials",
+            "role": user_info.get("role", "user"),
+            "company_id": str(TENANT_ID),
+            "tenant_id": TENANT_ID,
+            "full_name": user_info.get("full_name") or username,
+            "provider": "portal",
         },
     )
 
@@ -268,6 +276,13 @@ async def on_message(message: cl.Message):
     if not query:
         return
 
+    # Plan/trial enforcement
+    from core.plan import check_query_allowed, increment_query_count
+    allowed, plan_msg = await asyncio.to_thread(check_query_allowed, company_id)
+    if not allowed:
+        await cl.Message(content=plan_msg).send()
+        return
+
     # Stream response via RAG chain
     response_msg = cl.Message(content="")
     await response_msg.send()
@@ -329,3 +344,6 @@ async def on_message(message: cl.Message):
         if not cl.user_session.get("session_title_set", False) and session_id:
             await asyncio.to_thread(update_session_title, session_id, query)
             cl.user_session.set("session_title_set", True)
+
+        # Increment trial query count after successful answer
+        await asyncio.to_thread(increment_query_count, company_id)

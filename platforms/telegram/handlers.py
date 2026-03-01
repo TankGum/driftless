@@ -243,11 +243,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     company_id = user.get("company_id", "pilot")
+
+    from core.plan import check_query_allowed, increment_query_count
+    allowed, plan_msg = check_query_allowed(company_id)
+    if not allowed:
+        await update.message.reply_text(plan_msg, parse_mode="Markdown")
+        return
+
     processing_msg = await update.message.reply_text(" Đang suy nghĩ...")
     try:
         answer = orchestrate(text, company_id, user)
         await processing_msg.delete()
         await update.message.reply_text(answer, parse_mode="Markdown")
+        increment_query_count(company_id)
     except Exception as e:
         await processing_msg.delete()
         await update.message.reply_text("Xin lỗi, tôi gặp lỗi. Vui lòng thử lại.")
