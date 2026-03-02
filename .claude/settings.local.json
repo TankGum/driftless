@@ -24,7 +24,18 @@
       "Bash(find:*)",
       "Bash(cd /d/Workspace/Driftless && .venv/Scripts/python -c \"\nimport marshal, types\n\nwith open\\('knowledge/__pycache__/sheets_reader.cpython-312.pyc', 'rb'\\) as f:\n    f.read\\(16\\)\n    code = marshal.load\\(f\\)\n\ndef find_strings\\(co\\):\n    for c in co.co_consts:\n        if isinstance\\(c, str\\) and \\('vision' in c.lower\\(\\) or 'claude' in c.lower\\(\\) or 'tesseract' in c.lower\\(\\) or 'OCR' in c\\):\n            print\\(repr\\(c\\)\\)\n        if isinstance\\(c, types.CodeType\\):\n            find_strings\\(c\\)\n\nfind_strings\\(code\\)\n\" 2>&1)",
       "Bash(cd /d/Workspace/Driftless && PYTHONUTF8=1 .venv/Scripts/python -c \"\nimport marshal, types\n\nwith open\\('knowledge/__pycache__/sheets_reader.cpython-312.pyc', 'rb'\\) as f:\n    f.read\\(16\\)\n    code = marshal.load\\(f\\)\n\ndef find_strings\\(co\\):\n    for c in co.co_consts:\n        if isinstance\\(c, str\\) and \\('vision' in c.lower\\(\\) or 'claude' in c.lower\\(\\) or 'tesseract' in c.lower\\(\\) or 'OCR' in c\\):\n            print\\(repr\\(c\\)\\)\n        if isinstance\\(c, types.CodeType\\):\n            find_strings\\(c\\)\n\nfind_strings\\(code\\)\n\" 2>&1)",
-      "Bash(cd /d/Workspace/Driftless && .venv/Scripts/pip install pytesseract 2>&1)"
+      "Bash(cd /d/Workspace/Driftless && .venv/Scripts/pip install pytesseract 2>&1)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(xargs grep:*)",
+      "Bash(nginx:*)",
+      "Bash(lsof:*)",
+      "Bash(docker images:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker port:*)",
+      "Bash(docker:*)",
+      "Bash(source:*)"
     ]
   }
 }

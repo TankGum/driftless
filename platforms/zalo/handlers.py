@@ -305,9 +305,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     company_id = user.get("company_id", "pilot")
+
+    from core.plan import check_query_allowed, increment_query_count
+    allowed, plan_msg = check_query_allowed(company_id)
+    if not allowed:
+        await update.message.reply_text(strip_markdown(plan_msg))
+        return
+
     try:
         answer = orchestrate(text, company_id, user)
         await update.message.reply_text(strip_markdown(answer))
+        increment_query_count(company_id)
     except Exception as e:
         logger.error(f"Zalo orchestrator error: {e}")
         await update.message.reply_text("Xin lỗi, tôi gặp lỗi. Vui lòng thử lại.")

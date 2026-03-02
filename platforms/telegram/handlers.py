@@ -19,6 +19,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"start command invoked by {telegram_id}")
 
+    # Auto-assign company_id: dùng company duy nhất active (bỏ qua "default")
+    active_companies = (
+        supabase.table("companies")
+        .select("company_id")
+        .eq("is_active", True)
+        .neq("company_id", "default")
+        .execute()
+    )
+    auto_company_id = (
+        active_companies.data[0]["company_id"]
+        if len(active_companies.data) == 1
+        else "default"
+    )
+
     existing = (
         supabase.table("users")
         .select("*")
@@ -33,6 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "username": user.username,
                 "full_name": user.full_name,
                 "role": "member",
+                "company_id": auto_company_id,
             }
         ).execute()
 
@@ -43,6 +58,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Gõ /help để xem các lệnh có sẵn."
         )
     else:
+        # Nếu user cũ chưa có company_id hợp lệ → update
+        current_company = existing.data[0].get("company_id")
+        if current_company in (None, "default", "pilot") and auto_company_id != "default":
+            supabase.table("users").update(
+                {"company_id": auto_company_id}
+            ).eq("telegram_id", telegram_id).execute()
+
         await update.message.reply_text(
             f"Chào lại {user.first_name}! Tôi có thể giúp gì cho bạn?"
         )
@@ -221,11 +243,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     company_id = user.get("company_id", "pilot")
+
+    from core.plan import check_query_allowed, increment_query_count
+    allowed, plan_msg = check_query_allowed(company_id)
+    if not allowed:
+        await update.message.reply_text(plan_msg, parse_mode="Markdown")
+        return
+
     processing_msg = await update.message.reply_text(" Đang suy nghĩ...")
     try:
         answer = orchestrate(text, company_id, user)
         await processing_msg.delete()
         await update.message.reply_text(answer, parse_mode="Markdown")
+        increment_query_count(company_id)
     except Exception as e:
         await processing_msg.delete()
         await update.message.reply_text("Xin lỗi, tôi gặp lỗi. Vui lòng thử lại.")

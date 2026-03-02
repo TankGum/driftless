@@ -1,0 +1,1 @@
+# Heavy ML packages moved to fastembed (ONNX) — torch and sentence-transformers no longer needed.

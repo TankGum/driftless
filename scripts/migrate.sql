@@ -1,185 +1,211 @@
 -- ============================================
--- DRIFTLESS - Database migration (Telegram + Zalo)
--- Safe to run many times (idempotent)
+-- DRIFTLESS - Database Setup (single file)
+-- Fresh setup: run this once in Supabase SQL Editor
+-- Safe to run multiple times (idempotent)
 -- ============================================
 
-create extension if not exists vector;
+CREATE EXTENSION IF NOT EXISTS vector;
 
+-- ============================================
 -- COMPANIES
-create table if not exists companies (
-  id bigserial primary key,
-  company_id text unique not null,
-  name text not null,
-  telegram_group_id text,
-  admin_telegram_id bigint,
-  invite_code text,
-  is_active boolean default true,
-  created_at timestamptz default now()
+-- ============================================
+CREATE TABLE IF NOT EXISTS companies (
+  id                  bigserial   PRIMARY KEY,
+  company_id          text        UNIQUE NOT NULL,
+  name                text        NOT NULL,
+  telegram_group_id   text,
+  admin_telegram_id   bigint,
+  invite_code         text,
+  is_active           boolean     DEFAULT true,
+  created_at          timestamptz DEFAULT now()
 );
 
-alter table if exists companies add column if not exists telegram_group_id text;
-alter table if exists companies add column if not exists admin_telegram_id bigint;
-alter table if exists companies add column if not exists invite_code text;
-alter table if exists companies add column if not exists is_active boolean default true;
+CREATE INDEX IF NOT EXISTS idx_companies_company_id ON companies(company_id);
 
--- USERS (multi-platform identity)
-create table if not exists users (
-  id bigserial primary key,
-  telegram_id bigint,
-  zalo_id text,
-  username text,
-  full_name text,
-  role text default 'member',
-  company_id text default 'default',
-  created_at timestamptz default now()
-);
+-- Plan & trial management
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'trial';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS trial_query_count INT DEFAULT 0;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMPTZ;
 
-alter table if exists users add column if not exists telegram_id bigint;
-alter table if exists users add column if not exists zalo_id text;
-alter table if exists users add column if not exists username text;
-alter table if exists users add column if not exists full_name text;
-alter table if exists users add column if not exists role text default 'member';
-alter table if exists users add column if not exists company_id text default 'default';
-alter table if exists users add column if not exists created_at timestamptz default now();
-alter table if exists users alter column telegram_id drop not null;
-update users set company_id = 'default' where company_id is null;
-update users set role = 'member' where role is null;
+-- Container & infrastructure info
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS subdomain TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS container_name TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS container_port INT;
 
-create unique index if not exists uq_users_telegram_id
-  on users(telegram_id) where telegram_id is not null;
-create unique index if not exists uq_users_zalo_id
-  on users(zalo_id) where zalo_id is not null;
-create index if not exists idx_users_company on users(company_id);
-create index if not exists idx_users_telegram on users(telegram_id);
-create index if not exists idx_users_zalo on users(zalo_id);
-
--- DATA SOURCES
-create table if not exists data_sources (
-  id bigserial primary key,
-  company_id text not null,
-  source_type text not null,
-  source_id text not null,
-  title text,
-  added_by text,
-  is_active boolean default true,
-  created_at timestamptz default now(),
-  last_synced timestamptz,
-  unique(company_id, source_id)
-);
-
-alter table if exists data_sources add column if not exists company_id text;
-alter table if exists data_sources add column if not exists source_type text;
-alter table if exists data_sources add column if not exists source_id text;
-alter table if exists data_sources add column if not exists title text;
-alter table if exists data_sources add column if not exists added_by text;
-alter table if exists data_sources add column if not exists is_active boolean default true;
-alter table if exists data_sources add column if not exists created_at timestamptz default now();
-alter table if exists data_sources add column if not exists last_synced timestamptz;
-alter table if exists data_sources alter column added_by type text using added_by::text;
-create index if not exists idx_data_sources_company on data_sources(company_id);
-
--- DOCUMENTS
-create table if not exists documents (
-  id bigserial primary key,
-  company_id text not null,
-  source_type text,
-  source_id text,
-  sheet_name text,
-  title text,
-  last_synced timestamptz default now()
-);
-
-alter table if exists documents add column if not exists company_id text;
-alter table if exists documents add column if not exists source_type text;
-alter table if exists documents add column if not exists source_id text;
-alter table if exists documents add column if not exists sheet_name text;
-alter table if exists documents add column if not exists title text;
-alter table if exists documents add column if not exists last_synced timestamptz default now();
-create index if not exists idx_documents_company on documents(company_id);
-create index if not exists idx_documents_source on documents(source_id);
-
--- DOCUMENT CHUNKS
-create table if not exists document_chunks (
-  id bigserial primary key,
-  document_id bigint references documents(id) on delete cascade,
-  content text not null,
-  embedding vector(1536),
-  row_number int,
-  metadata jsonb,
-  created_at timestamptz default now()
-);
-
-alter table if exists document_chunks add column if not exists document_id bigint references documents(id) on delete cascade;
-alter table if exists document_chunks add column if not exists content text;
-alter table if exists document_chunks add column if not exists embedding vector(1536);
-alter table if exists document_chunks add column if not exists row_number int;
-alter table if exists document_chunks add column if not exists metadata jsonb;
-alter table if exists document_chunks add column if not exists created_at timestamptz default now();
-
-create index if not exists idx_document_chunks_embedding
-  on document_chunks using ivfflat (embedding vector_cosine_ops) with (lists = 100);
-
--- ONBOARDING
-create table if not exists onboarding_progress (
-  id bigserial primary key,
-  telegram_id bigint,
-  zalo_id text,
-  step int default 0,
-  completed_steps jsonb default '[]'::jsonb,
-  started_at timestamptz default now(),
-  completed_at timestamptz
-);
-
-alter table if exists onboarding_progress add column if not exists telegram_id bigint;
-alter table if exists onboarding_progress add column if not exists zalo_id text;
-alter table if exists onboarding_progress add column if not exists step int default 0;
-alter table if exists onboarding_progress add column if not exists completed_steps jsonb default '[]'::jsonb;
-alter table if exists onboarding_progress add column if not exists started_at timestamptz default now();
-alter table if exists onboarding_progress add column if not exists completed_at timestamptz;
-create index if not exists idx_onboarding_telegram on onboarding_progress(telegram_id);
-create index if not exists idx_onboarding_zalo on onboarding_progress(zalo_id);
-
--- FEEDBACKS
-create table if not exists feedbacks (
-  id bigserial primary key,
-  company_id text not null,
-  content text not null,
-  category text,
-  status text default 'new',
-  created_at timestamptz default now()
-);
-
-alter table if exists feedbacks add column if not exists company_id text;
-alter table if exists feedbacks add column if not exists content text;
-alter table if exists feedbacks add column if not exists category text;
-alter table if exists feedbacks add column if not exists status text default 'new';
-alter table if exists feedbacks add column if not exists created_at timestamptz default now();
-create index if not exists idx_feedbacks_company on feedbacks(company_id);
-
--- REMINDERS
-create table if not exists reminders (
-  id bigserial primary key,
-  telegram_id bigint,
-  zalo_id text,
-  content text not null,
-  remind_at timestamptz not null,
-  sent boolean default false,
-  created_at timestamptz default now()
-);
-
-alter table if exists reminders add column if not exists telegram_id bigint;
-alter table if exists reminders add column if not exists zalo_id text;
-alter table if exists reminders add column if not exists content text;
-alter table if exists reminders add column if not exists remind_at timestamptz;
-alter table if exists reminders add column if not exists sent boolean default false;
-alter table if exists reminders add column if not exists created_at timestamptz default now();
-create index if not exists idx_reminders_sent on reminders(sent, remind_at);
-
--- DEFAULT COMPANY
-insert into companies (company_id, name, admin_telegram_id, is_active)
-values ('default', 'Default Company', 0, true)
-on conflict (company_id) do nothing;
+-- Usage tracking (for Pro billing reference)
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS token_usage_total BIGINT DEFAULT 0;
 
 -- ============================================
--- Done
+-- USERS (multi-platform identity)
+-- ============================================
+CREATE TABLE IF NOT EXISTS users (
+  id            bigserial   PRIMARY KEY,
+  telegram_id   bigint,
+  zalo_id       text,
+  username      text,
+  full_name     text,
+  role          text        DEFAULT 'member',
+  company_id    text        DEFAULT 'default',
+  password_hash text,
+  created_at    timestamptz DEFAULT now()
+);
+
+-- Partial unique indexes so NULL values are allowed on both columns
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_telegram_id
+  ON users(telegram_id) WHERE telegram_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_zalo_id
+  ON users(zalo_id) WHERE zalo_id IS NOT NULL;
+
+-- Username must be unique within a company (required for Chainlit login)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_company
+  ON users(username, company_id);
+
+CREATE INDEX IF NOT EXISTS idx_users_company   ON users(company_id);
+CREATE INDEX IF NOT EXISTS idx_users_telegram  ON users(telegram_id);
+CREATE INDEX IF NOT EXISTS idx_users_zalo      ON users(zalo_id);
+
+-- ============================================
+-- DATA SOURCES
+-- ============================================
+CREATE TABLE IF NOT EXISTS data_sources (
+  id           bigserial   PRIMARY KEY,
+  company_id   text        NOT NULL,
+  source_type  text        NOT NULL,
+  source_id    text        NOT NULL,
+  title        text,
+  added_by     text,
+  is_active    boolean     DEFAULT true,
+  created_at   timestamptz DEFAULT now(),
+  last_synced  timestamptz,
+  content_hash text,
+  UNIQUE (company_id, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_sources_company ON data_sources(company_id);
+
+-- Add content_hash to existing deployments (no-op on fresh installs)
+ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS content_hash text;
+
+-- ============================================
+-- DOCUMENTS
+-- ============================================
+CREATE TABLE IF NOT EXISTS documents (
+  id          bigserial   PRIMARY KEY,
+  company_id  text        NOT NULL,
+  source_type text,
+  source_id   text,
+  sheet_name  text,
+  title       text,
+  last_synced timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_company ON documents(company_id);
+CREATE INDEX IF NOT EXISTS idx_documents_source  ON documents(source_id);
+
+-- ============================================
+-- DOCUMENT CHUNKS
+-- ============================================
+CREATE TABLE IF NOT EXISTS document_chunks (
+  id          bigserial   PRIMARY KEY,
+  document_id bigint      REFERENCES documents(id) ON DELETE CASCADE,
+  content     text        NOT NULL,
+  embedding   vector(1024),
+  row_number  int,
+  metadata    jsonb,
+  fts_content tsvector    GENERATED ALWAYS AS (to_tsvector('simple', coalesce(content, ''))) STORED,
+  created_at  timestamptz DEFAULT now()
+);
+
+-- Vector similarity index (IVFFlat)
+CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding
+  ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Full-text search index
+CREATE INDEX IF NOT EXISTS idx_chunks_fts
+  ON document_chunks USING GIN(fts_content);
+
+-- ============================================
+-- CHAT MESSAGES (persistent history)
+-- ============================================
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id          bigserial   PRIMARY KEY,
+  company_id  text        NOT NULL,
+  user_key    text        NOT NULL,
+  platform    text        NOT NULL,  -- 'telegram', 'zalo', 'chainlit'
+  role        text        NOT NULL,  -- 'user' or 'assistant'
+  content     text        NOT NULL,
+  created_at  timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_lookup
+  ON chat_messages(company_id, user_key, created_at DESC);
+
+-- Add platform column to existing deployments (no-op on fresh installs)
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS platform text;
+
+-- ============================================
+-- CHAT SESSIONS (Chainlit WebUI only)
+-- ============================================
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id  text        NOT NULL,
+  user_key    text        NOT NULL,
+  title       text,               -- auto-set từ tin nhắn đầu (50 chars)
+  is_pinned   boolean     DEFAULT false,
+  created_at  timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_lookup
+  ON chat_sessions(company_id, user_key, is_pinned DESC, created_at DESC);
+
+-- Add session_id to chat_messages (NULL = legacy messages from Telegram/Zalo)
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id uuid
+  REFERENCES chat_sessions(id) ON DELETE CASCADE;
+
+-- ============================================
+-- KEYWORD SEARCH RPC FUNCTION
+-- Used by pipeline/rag_chain.py for BM25-style retrieval
+-- ============================================
+CREATE OR REPLACE FUNCTION keyword_search_chunks(
+  query_text        text,
+  filter_company_id text,
+  match_count       int DEFAULT 20
+)
+RETURNS TABLE (
+  id          bigint,
+  content     text,
+  document_id bigint,
+  metadata    jsonb,
+  title       text,
+  source_id   text
+)
+LANGUAGE sql
+AS $$
+  SELECT
+    dc.id,
+    dc.content,
+    dc.document_id,
+    dc.metadata,
+    coalesce(dc.metadata->>'title', '')     AS title,
+    coalesce(dc.metadata->>'source_id', '') AS source_id
+  FROM document_chunks dc
+  JOIN documents d ON d.id = dc.document_id
+  WHERE d.company_id = filter_company_id
+    AND dc.fts_content @@ plainto_tsquery('simple', query_text)
+  ORDER BY ts_rank(dc.fts_content, plainto_tsquery('simple', query_text)) DESC
+  LIMIT match_count;
+$$;
+
+-- ============================================
+-- SEED: default company (fresh setup)
+-- ============================================
+INSERT INTO companies (company_id, name, admin_telegram_id, is_active)
+VALUES ('default', 'Default Company', 0, true)
+ON CONFLICT (company_id) DO NOTHING;
+
+-- ============================================
+-- Done. Next steps:
+--   python scripts/setup.py   → create admin account + company
+--   python main.py            → start the bot
 -- ============================================

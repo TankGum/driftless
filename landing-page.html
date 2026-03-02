@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driftless AI - Trợ lý AI Nội bộ cho Doanh nghiệp hiện đại</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#a855f7',
+                        dark: '#0f172a',
+                    },
+                    animation: {
+                        'gradient': 'gradient 8s linear infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        gradient: {
+                            '0%, 100%': { 'background-size': '200% 200%', 'background-position': 'left center' },
+                            '50%': { 'background-size': '200% 200%', 'background-position': 'right center' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .text-gradient {
+            background: linear-gradient(to right, #818cf8, #c084fc, #fb7185);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-glow {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            height: 600px;
+            background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+            z-index: -1;
+        }
+    </style>
+</head>
+<body class="bg-dark text-slate-300 antialiased overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="fixed top-0 w-full z-50 glass" x-data="{ mobileMenu: false }">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 bg-gradient-to-tr from-primary to-secondary rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <span class="text-white font-bold text-xl">D</span>
+                    </div>
+                    <span class="text-white font-extrabold text-2xl tracking-tight">Driftless<span class="text-primary">.ai</span></span>
+                </div>
+                
+                <nav class="hidden md:flex space-x-8 text-sm font-medium">
+                    <a href="#features" class="hover:text-white transition-colors">Tính năng</a>
+                    <a href="#demo" class="hover:text-white transition-colors">Giải pháp</a>
+                    <a href="#pricing" class="hover:text-white transition-colors">Bảng giá</a>
+                    <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+                </nav>
+
+                <div class="hidden md:flex items-center gap-4">
+                    <a href="#" class="text-sm font-semibold hover:text-white transition-colors">Đăng nhập</a>
+                    <a href="#cta" class="bg-white text-dark px-6 py-2.5 rounded-full text-sm font-bold hover:bg-indigo-50 transition-all transform hover:scale-105">
+                        Dùng thử miễn phí
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button class="md:hidden text-white" @click="mobileMenu = !mobileMenu">
+                    <svg x-show="!mobileMenu" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                    <svg x-show="mobileMenu" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div x-show="mobileMenu" x-transition class="md:hidden bg-dark/95 border-b border-white/10 px-4 py-6 space-y-4">
+            <a href="#features" class="block text-lg" @click="mobileMenu = false">Tính năng</a>
+            <a href="#demo" class="block text-lg" @click="mobileMenu = false">Giải pháp</a>
+            <a href="#pricing" class="block text-lg" @click="mobileMenu = false">Bảng giá</a>
+            <a href="#cta" class="block bg-primary text-white p-3 rounded-xl text-center font-bold">Bắt đầu ngay</a>
+        </div>
+    </header>
+
+    <main class="pt-20">
+        <div class="hero-glow"></div>
+
+        <!-- Section 1: Hero -->
+        <section class="relative pt-20 pb-32 px-4 overflow-hidden">
+            <div class="max-w-7xl mx-auto text-center">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border-indigo-500/20 text-indigo-400 text-xs font-bold mb-8 animate-bounce">
+                    <span class="flex h-2 w-2 rounded-full bg-indigo-500"></span>
+                    NEW: Tích hợp Claude 3.5 Sonnet & GPT-4o
+                </div>
+                <h1 class="text-5xl md:text-7xl font-extrabold text-white mb-6 tracking-tight leading-tight">
+                    Biến dữ liệu doanh nghiệp thành <br>
+                    <span class="text-gradient">Trí tuệ thực thi.</span>
+                </h1>
+                <p class="max-w-2xl mx-auto text-lg md:text-xl text-slate-400 mb-12 leading-relaxed">
+                    Driftless là AI Agent nội bộ hoạt động ngay trên Zalo & Telegram. Tự động trả lời quy trình, phân tích báo cáo và dự báo rủi ro chỉ từ Google Sheets & Docs của bạn.
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-4 mb-16">
+                    <a href="#cta" class="px-8 py-4 bg-primary hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-all shadow-xl shadow-indigo-500/25 flex items-center justify-center gap-2 group">
+                        Triển khai ngay sau 5 phút
+                        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                    </a>
+                    <a href="#demo" class="px-8 py-4 glass hover:bg-white/5 text-white rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2">
+                        Xem Demo
+                    </a>
+                </div>
+
+                <!-- Dashboard Preview -->
+                <div class="relative max-w-5xl mx-auto">
+                    <div class="absolute -top-20 -left-20 w-64 h-64 bg-indigo-500/20 rounded-full blur-[100px]"></div>
+                    <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-purple-500/20 rounded-full blur-[100px]"></div>
+                    <div class="glass rounded-3xl p-2 border-white/10 shadow-2xl relative">
+                        <div class="bg-dark/50 rounded-2xl overflow-hidden border border-white/5">
+                            <img src="https://images.unsplash.com/photo-1639322537228-f710d846310a?auto=format&fit=crop&q=80&w=1200" alt="Driftless AI Dashboard" class="w-full opacity-80">
+                            <!-- Overlay Chat Mockup -->
+                            <div class="absolute bottom-10 right-10 w-72 glass p-4 rounded-2xl border-white/20 shadow-2xl animate-float">
+                                <div class="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
+                                    <div class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-[10px]">Z</div>
+                                    <span class="text-xs font-bold text-white">Zalo Business</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="bg-white/10 p-2 rounded-lg text-[10px] text-left">
+                                        Bot ơi, cho biết tiến độ dự án X?
+                                    </div>
+                                    <div class="bg-indigo-600/20 p-2 rounded-lg text-[10px] text-left border border-indigo-500/30">
+                                        <p class="font-bold text-indigo-300 mb-1">Driftless AI:</p>
+                                        Dự án X đạt 75%. Đang có 2 task quá hạn tại bộ phận Tech. Dự báo rủi ro chậm deadline là 15%.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Pain Points (Before/After) -->
+        <section id="demo" class="py-24 px-4 bg-white/[0.02]">
+            <div class="max-w-7xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Vấn đề của doanh nghiệp truyền thống</h2>
+                    <p class="text-slate-400">Tại sao bạn cần một AI Agent như Driftless?</p>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div class="space-y-6">
+                        <div class="p-6 rounded-2xl border border-red-500/20 bg-red-500/5">
+                            <h3 class="text-red-400 font-bold mb-2 flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Trước khi có Driftless
+                            </h3>
+                            <ul class="space-y-3 text-sm">
+                                <li class="flex items-start gap-2"><span>❌</span> Nhân viên mất 30p/ngày chỉ để tìm file quy trình cũ.</li>
+                                <li class="flex items-start gap-2"><span>❌</span> Sếp phải chờ kế toán tổng hợp báo cáo đến cuối tuần.</li>
+                                <li class="flex items-start gap-2"><span>❌</span> Dữ liệu nằm chết trong các file Sheets rời rạc.</li>
+                            </ul>
+                        </div>
+                        <div class="p-6 rounded-2xl border border-green-500/20 bg-green-500/5">
+                            <h3 class="text-green-400 font-bold mb-2 flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Sau khi dùng Driftless
+                            </h3>
+                            <ul class="space-y-3 text-sm">
+                                <li class="flex items-start gap-2"><span>✅</span> Hỏi và nhận đáp án ngay lập tức trên Zalo/Telegram.</li>
+                                <li class="flex items-start gap-2"><span>✅</span> Báo cáo Real-time từ Google Sheets chỉ bằng 1 câu lệnh.</li>
+                                <li class="flex items-start gap-2"><span>✅</span> AI tự động cảnh báo rủi ro KPI và tiến độ.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="glass p-8 rounded-3xl border-white/10 shadow-inner">
+                        <blockquote class="text-2xl font-medium text-white italic leading-relaxed mb-6">
+                            "Driftless đã cắt giảm 80% thời gian hỏi đáp nội bộ của team tôi. Thông tin giờ đây thực sự 'sống' và nằm ngay trong túi của mỗi nhân viên."
+                        </blockquote>
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+                            <div>
+                                <p class="text-white font-bold">CEO Nguyễn Văn A</p>
+                                <p class="text-xs text-slate-500">Founder @ TechFlow Vietnam</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Features (Bento Grid) -->
+        <section id="features" class="py-24 px-4">
+            <div class="max-w-7xl mx-auto">
+                <div class="mb-16">
+                    <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Mạnh mẽ hơn bất kỳ Chatbot nào</h2>
+                    <p class="text-slate-400 max-w-2xl">Chúng tôi không chỉ trả lời câu hỏi, chúng tôi kết nối và phân tích dữ liệu thực tế của doanh nghiệp bạn.</p>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- Feature 1 -->
+                    <div class="md:col-span-2 glass p-8 rounded-3xl border-white/10 group hover:border-primary/50 transition-all cursor-default">
+                        <div class="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-110 transition-transform">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-4">Knowledge RAG 2.0</h3>
+                        <p class="text-slate-400 leading-relaxed mb-6">Tự động quét Google Sheets, Docs và cả file PDF (có OCR). AI của Driftless hiểu ngữ cảnh và trả lời chính xác quy trình công ty, không bao giờ "chém gió".</p>
+                        <div class="flex gap-2">
+                            <span class="px-3 py-1 bg-white/5 rounded-full text-[10px] font-bold uppercase tracking-wider">Sheets</span>
+                            <span class="px-3 py-1 bg-white/5 rounded-full text-[10px] font-bold uppercase tracking-wider">Docs</span>
+                            <span class="px-3 py-1 bg-white/5 rounded-full text-[10px] font-bold uppercase tracking-wider">PDF OCR</span>
+                        </div>
+                    </div>
+
+                    <!-- Feature 2 -->
+                    <div class="glass p-8 rounded-3xl border-white/10 group hover:border-purple-500/50 transition-all">
+                        <div class="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-4">Analytics Tức thì</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">Kết nối trực tiếp với file KPI. "Hỏi: Tình hình doanh số tháng này?" - Bot sẽ tự tính toán và vẽ biểu đồ ngay cho bạn.</p>
+                    </div>
+
+                    <!-- Feature 3 -->
+                    <div class="glass p-8 rounded-3xl border-white/10 group hover:border-blue-500/50 transition-all">
+                        <div class="w-14 h-14 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-4">Dự báo rủi ro</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">Công cụ Forecasting sử dụng AI để cảnh báo các dự án có nguy cơ trễ hạn hoặc nhân sự đang bị quá tải dựa trên dữ liệu thô.</p>
+                    </div>
+
+                    <!-- Feature 4 -->
+                    <div class="md:col-span-2 glass p-8 rounded-3xl border-white/10 group hover:border-pink-500/50 transition-all">
+                        <div class="w-14 h-14 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-400 mb-6 group-hover:scale-110 transition-transform">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-4">Tự động hóa Onboarding & Feedback</h3>
+                        <p class="text-slate-400 leading-relaxed">Giúp nhân viên mới làm quen với môi trường nhanh hơn qua lộ trình học tự động. Hỗ trợ hòm thư góp ý ẩn danh giúp sếp lắng nghe đội ngũ 24/7.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Pricing -->
+        <section id="pricing" class="py-24 px-4 bg-white/[0.01]">
+            <div class="max-w-7xl mx-auto text-center">
+                <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Bắt đầu miễn phí, nâng cấp khi cần</h2>
+                <p class="text-slate-400 mb-16">Phù hợp cho mọi quy mô doanh nghiệp từ 5 - 500 nhân sự.</p>
+
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- Basic -->
+                    <div class="glass p-10 rounded-3xl border-white/10 flex flex-col items-center">
+                        <span class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Khởi tạo</span>
+                        <div class="text-4xl font-extrabold text-white mb-2">0đ</div>
+                        <p class="text-sm text-slate-500 mb-8">Dành cho team nhỏ thử nghiệm</p>
+                        <ul class="text-left space-y-4 mb-10 text-sm w-full">
+                            <li class="flex items-center gap-2">✅ Tích hợp Telegram</li>
+                            <li class="flex items-center gap-2">✅ 100 câu hỏi/tháng</li>
+                            <li class="flex items-center gap-2">✅ 3 tài liệu nguồn</li>
+                            <li class="flex items-center gap-2 text-slate-600">❌ Phân tích số liệu</li>
+                        </ul>
+                        <a href="#" class="w-full py-3 rounded-xl border border-white/20 font-bold hover:bg-white/5 transition-all mt-auto">Bắt đầu ngay</a>
+                    </div>
+
+                    <!-- Pro -->
+                    <div class="glass p-10 rounded-3xl border-indigo-500/50 bg-indigo-500/[0.05] relative flex flex-col items-center transform scale-105 shadow-2xl">
+                        <div class="absolute -top-4 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter">Phổ biến nhất</div>
+                        <span class="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-4">Chuyên nghiệp</span>
+                        <div class="text-4xl font-extrabold text-white mb-2">1.9tr<span class="text-lg">/tháng</span></div>
+                        <p class="text-sm text-slate-500 mb-8">Dành cho SMEs đang tăng trưởng</p>
+                        <ul class="text-left space-y-4 mb-10 text-sm w-full">
+                            <li class="flex items-center gap-2">✅ Telegram & Zalo Business</li>
+                            <li class="flex items-center gap-2">✅ Không giới hạn câu hỏi</li>
+                            <li class="flex items-center gap-2">✅ Full Analytics & Forecasting</li>
+                            <li class="flex items-center gap-2">✅ Hỗ trợ OCR tài liệu</li>
+                        </ul>
+                        <a href="#" class="w-full py-3 rounded-xl bg-primary text-white font-bold hover:bg-indigo-500 transition-all mt-auto shadow-lg shadow-indigo-500/25">Dùng thử 7 ngày</a>
+                    </div>
+
+                    <!-- Enterprise -->
+                    <div class="glass p-10 rounded-3xl border-white/10 flex flex-col items-center">
+                        <span class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Doanh nghiệp</span>
+                        <div class="text-4xl font-extrabold text-white mb-2">Liên hệ</div>
+                        <p class="text-sm text-slate-500 mb-8">Giải pháp tùy chỉnh & Bảo mật</p>
+                        <ul class="text-left space-y-4 mb-10 text-sm w-full">
+                            <li class="flex items-center gap-2">✅ Private Server Deployment</li>
+                            <li class="flex items-center gap-2">✅ Đào tạo AI theo chuyên môn</li>
+                            <li class="flex items-center gap-2">✅ Hỗ trợ 24/7 ưu tiên</li>
+                            <li class="flex items-center gap-2">✅ SLA Cam kết</li>
+                        </ul>
+                        <a href="#" class="w-full py-3 rounded-xl border border-white/20 font-bold hover:bg-white/5 transition-all mt-auto">Book Demo</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: FAQ -->
+        <section id="faq" class="py-24 px-4" x-data="{ active: null }">
+            <div class="max-w-3xl mx-auto">
+                <h2 class="text-3xl font-bold text-white text-center mb-16">Câu hỏi thường gặp</h2>
+                <div class="space-y-4">
+                    <div class="glass rounded-2xl overflow-hidden border-white/5">
+                        <button @click="active = active === 0 ? null : 0" class="w-full p-6 text-left flex justify-between items-center group">
+                            <span class="font-bold text-white group-hover:text-primary transition-colors">Dữ liệu của chúng tôi có được bảo mật không?</span>
+                            <svg class="w-5 h-5 transition-transform" :class="active === 0 ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div x-show="active === 0" x-collapse class="px-6 pb-6 text-slate-400 text-sm">
+                            Chúng tôi sử dụng kiến trúc mã hóa đầu cuối và tuân thủ các tiêu chuẩn bảo mật của Supabase & Google Cloud. Dữ liệu của bạn chỉ được dùng để huấn luyện Context tạm thời cho AI, không bao giờ được dùng để huấn luyện mô hình công khai.
+                        </div>
+                    </div>
+                    <div class="glass rounded-2xl overflow-hidden border-white/5">
+                        <button @click="active = active === 1 ? null : 1" class="w-full p-6 text-left flex justify-between items-center group">
+                            <span class="font-bold text-white group-hover:text-primary transition-colors">Tôi có cần biết lập trình để cài đặt không?</span>
+                            <svg class="w-5 h-5 transition-transform" :class="active === 1 ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div x-show="active === 1" x-collapse class="px-6 pb-6 text-slate-400 text-sm">
+                            Hoàn toàn không. Bạn chỉ cần dán link Google Sheets/Docs của mình vào dashboard của Driftless, chúng tôi sẽ lo phần còn lại.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final CTA -->
+        <section id="cta" class="py-32 px-4 relative overflow-hidden">
+            <div class="absolute inset-0 bg-primary/20 blur-[150px]"></div>
+            <div class="max-w-5xl mx-auto glass p-12 md:p-20 rounded-[40px] text-center border-white/20 relative">
+                <h2 class="text-4xl md:text-6xl font-extrabold text-white mb-8 tracking-tight">
+                    Sẵn sàng đưa doanh nghiệp <br> vào kỷ nguyên AI?
+                </h2>
+                <p class="text-slate-300 text-lg mb-12 max-w-xl mx-auto">
+                    Đừng để nhân viên của bạn bị chìm nghỉm trong đống tài liệu cũ kỹ. Hãy mang tri thức đến ngay tầm tay họ.
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-6">
+                    <a href="#" class="px-10 py-5 bg-white text-dark rounded-2xl font-black text-xl hover:scale-105 transition-all shadow-2xl">
+                        Bắt đầu miễn phí ngay
+                    </a>
+                    <a href="#" class="px-10 py-5 border border-white/20 rounded-2xl font-bold text-xl hover:bg-white/5 transition-all">
+                        Liên hệ tư vấn 1-1
+                    </a>
+                </div>
+                <p class="mt-8 text-xs text-slate-500 font-medium">Không yêu cầu thẻ tín dụng • Setup chỉ mất 5 phút</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="py-12 border-t border-white/5 px-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-gradient-to-tr from-primary to-secondary rounded-lg flex items-center justify-center">
+                    <span class="text-white font-bold text-sm">D</span>
+                </div>
+                <span class="text-white font-bold text-xl tracking-tight">Driftless.ai</span>
+            </div>
+            <p class="text-slate-500 text-sm">© 2026 Driftless AI. Một sản phẩm được vận hành bởi Claude 3.5 Sonnet.</p>
+            <div class="flex gap-6 text-sm">
+                <a href="#" class="hover:text-white transition-colors">Privacy</a>
+                <a href="#" class="hover:text-white transition-colors">Terms</a>
+                <a href="#" class="hover:text-white transition-colors">Support</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

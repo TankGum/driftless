@@ -69,13 +69,12 @@ Nguyên tắc:
         messages=[
             {
                 "role": "user",
-                "content": f"""Dữ liệu hiện tại:
-{data_context}
-
-Các sheet bổ sung:
-{'\n\n'.join(other_sheets_context) or 'Không có sheet bổ sung.'}
-
-Câu hỏi: {query}""",
+                "content": (
+                    f"Dữ liệu hiện tại:\n{data_context}\n\n"
+                    f"Các sheet bổ sung:\n"
+                    + ('\n\n'.join(other_sheets_context) or 'Không có sheet bổ sung.')
+                    + f"\n\nCâu hỏi: {query}"
+                ),
             }
         ],
     )
