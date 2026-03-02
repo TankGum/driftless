@@ -26,7 +26,8 @@ class DriftlessDataLayer(BaseDataLayer):
 
     # ── Helpers ───────────────────────────────────────────────────────────
     def _company_id(self) -> str:
-        return DEFAULT_COMPANY_ID or "pilot"
+        from config import TENANT_ID
+        return str(TENANT_ID) if TENANT_ID > 0 else (DEFAULT_COMPANY_ID or "pilot")
 
     def _username_from_user_id(self, user_id: str) -> Optional[str]:
         """Chainlit passes filters.userId = PersistedUser.id (DB UUID).
@@ -66,7 +67,20 @@ class DriftlessDataLayer(BaseDataLayer):
         )
 
     async def create_user(self, user: User) -> Optional[PersistedUser]:
-        # Users already exist in DB — just look them up
+        existing = await self.get_user(user.identifier)
+        if existing:
+            return existing
+        company_id = self._company_id()
+        metadata = user.metadata or {}
+        try:
+            supabase.table("users").insert({
+                "username": user.identifier,
+                "full_name": metadata.get("full_name") or user.identifier,
+                "role": "admin",
+                "company_id": company_id,
+            }).execute()
+        except Exception:
+            pass  # duplicate key or race condition — fall through to re-lookup
         return await self.get_user(user.identifier)
 
     # ── Threads (= chat_sessions) ─────────────────────────────────────────

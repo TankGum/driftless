@@ -137,7 +137,11 @@ def process(query: str, company_id: str, user: dict) -> str:
     user_key = _user_key(user)
     platform = "telegram" if user.get("telegram_id") else "zalo" if user.get("zalo_id") else "chainlit"
 
-    history = load_history(company_id, user_key)
+    try:
+        history = load_history(company_id, user_key)
+    except Exception as e:
+        logger.warning(f"Could not load chat history (table may not exist yet): {e}")
+        history = []
     lc_history = [
         HumanMessage(content=m["content"]) if m["role"] == "user" else AIMessage(content=m["content"])
         for m in history
@@ -147,7 +151,10 @@ def process(query: str, company_id: str, user: dict) -> str:
         answer = _run_react_loop(query, company_id, user, lc_history)
         if not answer:
             raise ValueError("Empty response")
-        save_exchange(company_id, user_key, platform, query, answer)
+        try:
+            save_exchange(company_id, user_key, platform, query, answer)
+        except Exception as e:
+            logger.warning(f"Could not save chat history: {e}")
         return answer
     except Exception as e:
         logger.error(f"Orchestrator error: {e}", exc_info=True)
@@ -157,5 +164,8 @@ def process(query: str, company_id: str, user: dict) -> str:
         except Exception:
             from knowledge.retriever import answer_question
             answer = answer_question(query, company_id)
-        save_exchange(company_id, user_key, platform, query, answer)
+        try:
+            save_exchange(company_id, user_key, platform, query, answer)
+        except Exception:
+            pass
         return answer

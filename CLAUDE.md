@@ -66,6 +66,8 @@ Optional env vars:
 
 **Multi-tenancy:** Each company has a `company_id`. Users belong to a company. Data sources, documents, and feedbacks are scoped by `company_id`. The default/fallback is `"pilot"`.
 
+**Portal login flow (Chainlit WebUI in tenant containers):** `core/chainlit_data_layer.py` handles Chainlit's data persistence. `_company_id()` resolves the active company via `TENANT_ID` (injected by portal at container start) — `str(TENANT_ID)` when `TENANT_ID > 0`, falling back to `DEFAULT_COMPANY_ID or "pilot"`. On first portal login, `create_user()` auto-inserts a record into the `users` table using `user.metadata` (populated by `auth_callback` with `full_name`, `role`); subsequent logins return the existing record. This ensures Chainlit never returns "not found" after a successful portal auth.
+
 **Roles:** Three roles — `admin`, `pm`, `member`. In Telegram, enforced via decorators. In Zalo, checked inline in each handler. In WebUI/API, checked via `api/deps.py`. Admin-only: add/remove docs, resync, view feedback, set roles. PM+Admin: summary, risk alerts, list docs, sync status, file upload.
 
 **Supabase tables:** `users`, `companies`, `data_sources`, `documents`, `document_chunks`, `onboarding_progress`, `feedbacks`.

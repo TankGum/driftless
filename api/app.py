@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import chat, upload, admin, provision
+from config import TENANT_ID, COMPANY_NAME
 from core.logger import logger
 
 
@@ -81,6 +82,12 @@ def _start_zalo_polling():
 async def lifespan(app: FastAPI):
     """Manage application lifecycle: startup and shutdown."""
     logger.info("Driftless API starting up...")
+    if TENANT_ID > 0:
+        from core.company import ensure_company_initialized
+        import asyncio
+        await asyncio.to_thread(
+            ensure_company_initialized, str(TENANT_ID), COMPANY_NAME
+        )
     scheduler = _start_scheduler()
     yield
     logger.info("Driftless API shutting down...")

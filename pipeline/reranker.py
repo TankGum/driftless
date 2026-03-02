@@ -1,26 +1,19 @@
-"""Cross-encoder reranker — runs locally, zero API cost.
+"""Cross-encoder reranker — runs via fastembed ONNX, zero API cost, no PyTorch needed.
 
-Uses cross-encoder/ms-marco-MiniLM-L-6-v2 from sentence-transformers.
-Cross-encoder reads query + chunk together → better contextual understanding
-than bi-encoder cosine similarity.
+Uses Xenova/ms-marco-MiniLM-L-6-v2 (ONNX conversion of ms-marco-MiniLM-L-6-v2).
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from sentence_transformers import CrossEncoder
-
-_model: "CrossEncoder | None" = None
-_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+_model = None
+_MODEL_NAME = "Xenova/ms-marco-MiniLM-L-6-v2"
 
 
-def get_reranker() -> "CrossEncoder":
+def get_reranker():
     global _model
     if _model is None:
-        from sentence_transformers import CrossEncoder
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
         print(f"  [Reranker] Loading {_MODEL_NAME} (first time)...")
-        _model = CrossEncoder(_MODEL_NAME)
+        _model = TextCrossEncoder(_MODEL_NAME)
     return _model
 
 
@@ -34,11 +27,8 @@ def rerank(query: str, chunks: list[dict], top_k: int = 5) -> list[dict]:
         return []
 
     model = get_reranker()
-    pairs = [(query, c.get("content", "")[:1000]) for c in chunks]
-    scores = model.predict(pairs)
+    documents = [c.get("content", "")[:1000] for c in chunks]
+    scores = list(model.rerank(query, documents))
 
     ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
-    result = []
-    for chunk, score in ranked[:top_k]:
-        result.append({**chunk, "rerank_score": float(score)})
-    return result
+    return [{**chunk, "rerank_score": float(score)} for chunk, score in ranked[:top_k]]

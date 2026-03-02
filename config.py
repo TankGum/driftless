@@ -10,6 +10,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PORTAL_URL = os.getenv("PORTAL_URL", "")
 PORTAL_API_KEY = os.getenv("PORTAL_API_KEY", "")
 TENANT_ID = int(os.getenv("TENANT_ID", "0"))
+COMPANY_NAME = os.getenv("COMPANY_NAME", "")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH")
 

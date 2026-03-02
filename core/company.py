@@ -4,6 +4,26 @@ import random
 import string
 
 
+def ensure_company_initialized(company_id: str, company_name: str) -> None:
+    """Create company record in Supabase if it doesn't exist. Idempotent."""
+    existing = (
+        supabase.table("companies")
+        .select("company_id")
+        .eq("company_id", company_id)
+        .execute()
+    )
+    if not existing.data:
+        supabase.table("companies").insert({
+            "company_id": company_id,
+            "name": company_name or f"Company {company_id}",
+            "admin_telegram_id": 0,
+            "is_active": True,
+        }).execute()
+        logger.info("Initialized Supabase company %s: %s", company_id, company_name)
+    else:
+        logger.info("Supabase company %s already exists", company_id)
+
+
 def generate_company_id(name: str) -> str:
     base = name.lower().replace(" ", "_").replace("-", "_")
     base = ''.join(c for c in base if c.isalnum() or c == "_")

@@ -75,7 +75,7 @@ def auth_callback(username: str, password: str):
     return cl.User(
         identifier=user_info.get("email", username),
         metadata={
-            "role": user_info.get("role", "user"),
+            "role": "admin",
             "company_id": str(TENANT_ID),
             "tenant_id": TENANT_ID,
             "full_name": user_info.get("full_name") or username,
@@ -299,10 +299,12 @@ async def on_message(message: cl.Message):
                     await response_msg.stream_token(chunk)
 
             if not full_answer:
-                # Fallback: non-streaming invoke
-                full_answer = rag_chain.invoke(
-                    {"query": query, "company_id": company_id, "chat_history": chat_history}
+                # Fallback: non-streaming invoke (must run in thread to avoid blocking event loop)
+                full_answer = await asyncio.to_thread(
+                    rag_chain.invoke,
+                    {"query": query, "company_id": company_id, "chat_history": chat_history},
                 )
+                response_msg.content = full_answer
                 await response_msg.update()
 
             step.output = f"Trả lời xong ({len(full_answer)} ký tự)"
@@ -316,9 +318,9 @@ async def on_message(message: cl.Message):
 
     except Exception as e:
         logger.error(f"Chainlit message error: {e}", exc_info=True)
-        # Fallback to orchestrator
+        # Fallback to orchestrator (must run in thread to avoid blocking event loop)
         try:
-            full_answer = orchestrate(query, company_id, user_dict)
+            full_answer = await asyncio.to_thread(orchestrate, query, company_id, user_dict)
             response_msg.content = full_answer
             await response_msg.update()
         except Exception as fallback_err:

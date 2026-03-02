@@ -8,6 +8,8 @@ truncate table documents restart identity cascade;
 truncate table data_sources restart identity cascade;
 truncate table users restart identity cascade;
 truncate table companies restart identity cascade;
+truncate table chat_sessions restart identity cascade;
+truncate table chat_messages restart identity cascade;
 
 insert into companies (company_id, name, admin_telegram_id, is_active)
 values ('default', 'Default Company', 0, true)
