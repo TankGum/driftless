@@ -30,58 +30,91 @@ def get_data_layer():
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-@cl.password_auth_callback
-def auth_callback(username: str, password: str):
-    """Authenticate via driftless portal email + password."""
-    from config import PORTAL_URL, TENANT_ID
+async def _verify_portal_token(token: str) -> "cl.User | None":
+    """Verify a portal JWT token via the portal's verify-token endpoint."""
+    from config import PORTAL_URL, TENANT_ID, DEFAULT_COMPANY_ID
 
-    if not PORTAL_URL or not TENANT_ID:
+    if not PORTAL_URL:
         return None
 
     try:
-        resp = httpx.post(
-            f"{PORTAL_URL}/api/v1/auth/login",
-            json={"email": username, "password": password},
-            timeout=10.0,
-        )
-    except httpx.RequestError:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{PORTAL_URL}/api/v1/auth/verify-token",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+    except httpx.RequestError as e:
+        logger.warning(f"Portal token verify request failed: {e}")
         return None
 
     if resp.status_code != 200:
+        logger.warning(f"Portal token verify returned {resp.status_code}: {resp.text[:200]}")
         return None
 
     data = resp.json()
-    access_token = data.get("tokens", {}).get("access_token")
     user_info = data.get("user", {})
-    if not access_token:
+    tenant_info = data.get("tenant")
+
+    if not user_info.get("email"):
+        logger.warning("Portal verify-token: no email in user_info")
         return None
 
-    try:
-        tenant_resp = httpx.get(
-            f"{PORTAL_URL}/api/v1/tenants/me",
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=10.0,
-        )
-    except httpx.RequestError:
+    # Verify this token belongs to the correct tenant (skip when TENANT_ID=0 = dev/any-tenant)
+    if TENANT_ID and tenant_info and tenant_info.get("id") != TENANT_ID:
+        logger.warning(f"Portal verify-token: tenant mismatch ({tenant_info.get('id')} != {TENANT_ID})")
         return None
 
-    if tenant_resp.status_code != 200:
-        return None
-
-    tenant = tenant_resp.json()
-    if tenant is None or tenant.get("id") != TENANT_ID:
-        return None
+    company_id = str(TENANT_ID) if TENANT_ID else (DEFAULT_COMPANY_ID or "pilot")
 
     return cl.User(
-        identifier=user_info.get("email", username),
+        identifier=user_info["email"],
         metadata={
-            "role": "admin",
-            "company_id": str(TENANT_ID),
+            "role": user_info.get("role", "admin"),
+            "company_id": company_id,
             "tenant_id": TENANT_ID,
-            "full_name": user_info.get("full_name") or username,
+            "full_name": user_info.get("full_name") or user_info["email"],
             "provider": "portal",
         },
     )
+
+
+@cl.header_auth_callback
+async def auth_callback(headers: dict) -> "cl.User | None":
+    """Authenticate via portal JWT token (from Authorization header or auth_token cookie)."""
+    # Try Authorization header first
+    auth_header = headers.get("Authorization") or headers.get("authorization") or ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        user = await _verify_portal_token(token)
+        if user:
+            return user
+
+    # Try auth_token from cookie
+    cookie_header = headers.get("Cookie") or headers.get("cookie") or ""
+    for part in cookie_header.split(";"):
+        part = part.strip()
+        if part.startswith("auth_token="):
+            token = part[len("auth_token="):]
+            user = await _verify_portal_token(token)
+            if user:
+                return user
+
+    # Fallback: auto-login as admin for standalone/dev mode (no portal configured)
+    from config import PORTAL_URL, TENANT_ID, DEFAULT_COMPANY_ID
+    if not PORTAL_URL or not TENANT_ID:
+        company_id = DEFAULT_COMPANY_ID or "pilot"
+        return cl.User(
+            identifier="admin",
+            metadata={
+                "role": "admin",
+                "company_id": company_id,
+                "full_name": "Admin",
+                "provider": "dev",
+            },
+        )
+
+    return None
 
 
 # ── Session setup ─────────────────────────────────────────────────────────────

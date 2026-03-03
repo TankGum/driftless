@@ -239,7 +239,7 @@ def run_setup():
     if company_id:
         # Tự động ghi DEFAULT_COMPANY_ID vào .env
         env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-        set_key(env_path, "DEFAULT_COMPANY_ID", company_id)
+        set_key(env_path, "DEFAULT_COMPANY_ID", company_id, quote_mode="never")
         print(f"✅ Đã ghi DEFAULT_COMPANY_ID={company_id} vào .env")
 
         print("\n" + "=" * 50)

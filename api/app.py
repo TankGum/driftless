@@ -1,8 +1,10 @@
 """FastAPI application factory."""
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from api.routers import chat, upload, admin, provision
 from config import TENANT_ID, COMPANY_NAME
@@ -42,7 +44,7 @@ def _start_telegram_polling():
     def _run():
         tg_app = _build_application()
         logger.info("Telegram bot started (polling)")
-        tg_app.run_polling(drop_pending_updates=True)
+        tg_app.run_polling(drop_pending_updates=True, stop_signals=None)
 
     threading.Thread(target=_run, daemon=True, name="telegram-polling").start()
 
@@ -51,7 +53,9 @@ def _start_zalo_polling():
     import threading
 
     def _run():
-        try:
+        import asyncio
+
+        async def _polling_loop_with_backoff():
             from zalo_bot.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
             from platforms.zalo.handlers import (
                 start, help_command, handle_message, my_role, set_role,
@@ -70,10 +74,44 @@ def _start_zalo_polling():
             app.add_handler(CommandHandler("syncstatus", sync_status))
             app.add_handler(CommandHandler("join", join_company))
             app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+            # Override default 5s timeouts — Zalo API can be slow
+            from zalo_bot.request import HTTPXRequest
+            _req = HTTPXRequest(connect_timeout=30.0, read_timeout=35.0, write_timeout=30.0, pool_timeout=30.0)
+            app.bot._request = (_req, _req)
+
+            await app.bot.initialize()
             logger.info("Zalo bot started (polling)")
-            app.run_polling()
-        except Exception as e:
-            logger.error(f"Zalo polling error: {e}")
+            backoff = 5  # seconds between retries on error
+            try:
+                while True:
+                    try:
+                        update = await app.bot.get_update(timeout=30)
+                        backoff = 5  # reset on success
+                    except Exception as exc:
+                        logger.warning(f"Zalo getUpdates error (retry in {backoff}s): {exc}")
+                        await asyncio.sleep(backoff)
+                        backoff = min(backoff * 2, 120)
+                        continue
+                    if update:
+                        try:
+                            await app.process_update(update)
+                        except Exception as exc:
+                            logger.error(f"Zalo process_update error: {exc}")
+                    else:
+                        await asyncio.sleep(1)
+            finally:
+                await app.bot.shutdown()
+
+        import time
+        backoff = 10
+        while True:
+            try:
+                asyncio.run(_polling_loop_with_backoff())
+            except Exception as e:
+                logger.warning(f"Zalo polling crashed (retry in {backoff}s): {e}")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 120)
 
     threading.Thread(target=_run, daemon=True, name="zalo-polling").start()
 
@@ -101,6 +139,38 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def portal_auth_token_cookie_bridge(request: Request, call_next):
+        """Bridge portal auth_token query param to cookie before Chainlit auth runs."""
+        token = request.query_params.get("auth_token")
+        if token:
+            remaining = [
+                (k, v) for (k, v) in request.query_params.multi_items() if k != "auth_token"
+            ]
+            target_url = request.url.path
+            if remaining:
+                target_url = f"{target_url}?{urlencode(remaining, doseq=True)}"
+
+            response = RedirectResponse(url=target_url, status_code=307)
+            response.set_cookie(
+                key="auth_token",
+                value=token,
+                max_age=86400,  # 24h, matching existing handoff behavior
+                path="/",
+                samesite="lax",
+                httponly=True,
+            )
+            return response
+
+        response = await call_next(request)
+
+        # Chainlit logs out its own session on POST /logout, but we also need to
+        # clear portal handoff cookie to prevent immediate auto re-login.
+        if request.method.upper() == "POST" and request.url.path == "/logout":
+            response.delete_cookie(key="auth_token", path="/")
+
+        return response
 
     # CORS (allow Chainlit frontend)
     app.add_middleware(

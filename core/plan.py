@@ -104,3 +104,7 @@ def increment_query_count(company_id: str) -> None:
     supabase.table("companies").update(
         {"trial_query_count": current + 1}
     ).eq("company_id", company_id).execute()
+
+    # Sync usage to portal dashboard (best-effort)
+    from core.portal_usage import sync_portal_usage
+    sync_portal_usage(company_id, questions_used=current + 1)

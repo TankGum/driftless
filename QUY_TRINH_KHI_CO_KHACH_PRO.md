@@ -108,9 +108,11 @@
  - Bot tự start polling khi container up — không cần webhook, không cần domain cho bot
 
  Zalo:
+ - Lấy token tại bot.zapps.vn → tạo bot → copy token
  - Thêm ZALO_BOT_TOKEN=xxx vào .env của tenant
  - Restart container: docker compose restart
- - Zalo cần webhook public URL — cần SSL (bước 8)
+ - Zalo bot dùng polling (giống Telegram) — KHÔNG cần webhook, KHÔNG cần SSL riêng cho bot
+ - Lưu ý: bot-api.zapps.me đôi khi trả 502 (lỗi phía Zalo) — code tự retry với exponential backoff, không cần restart thủ công
 
  ---
  Bước 8 — SSL (HTTPS) nếu cần

@@ -4,6 +4,7 @@ import time
 import hashlib
 
 from database.supabase import supabase
+from core.portal_usage import count_active_sources, sync_portal_usage
 
 
 def _insert_chunks_batched(records: list, batch_size: int = 5) -> None:
@@ -348,5 +349,8 @@ def sync_local_file(
         },
         on_conflict="company_id,source_id",
     ).execute()
+
+    # Best-effort sync usage counters to portal.
+    sync_portal_usage(company_id, sources_count=count_active_sources(company_id))
 
     return True, f"✅ Đã index **{filename}** ({len(text_chunks)} chunks)", None

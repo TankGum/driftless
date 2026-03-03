@@ -1,3 +1,5 @@
+import asyncio
+
 from zalo_bot import Update
 from zalo_bot.ext import ContextTypes
 
@@ -16,15 +18,29 @@ from knowledge.source_manager import (
 from support.drafter import draft_document
 from platforms.zalo.formatter import strip_markdown
 
+_HANDLER_TIMEOUT = 20.0  # seconds before a handler call is considered timed out
+
 
 def _safe_handler(func):
-    """Error wrapper for Zalo handlers (mirrors core/decorators.py safe_handler)."""
+    """Error wrapper for Zalo handlers — adds 20s timeout guard and distinct timeout logging."""
     import functools
 
     @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         try:
-            return await func(update, context, *args, **kwargs)
+            return await asyncio.wait_for(
+                func(update, context, *args, **kwargs),
+                timeout=_HANDLER_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Zalo {func.__name__}: timed out after {_HANDLER_TIMEOUT}s (Zalo API không phản hồi)")
+            if update and update.message:
+                try:
+                    await update.message.reply_text(
+                        "Xin lỗi, hệ thống đang bận. Vui lòng thử lại sau."
+                    )
+                except Exception:
+                    pass
         except Exception as e:
             logger.error(f"Zalo error in {func.__name__}: {e}")
             if update and update.message:

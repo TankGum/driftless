@@ -1,6 +1,7 @@
 import json
 
 from core.logger import logger
+from core.portal_usage import count_active_sources, sync_portal_usage
 from config import GOOGLE_CREDENTIALS_PATH
 from database.supabase import supabase
 from knowledge.indexer import sync_source
@@ -90,6 +91,9 @@ def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bo
         {"title": title}
     ).eq("source_id", source_id).execute()
 
+    # Best-effort sync usage counters to portal.
+    sync_portal_usage(company_id, sources_count=count_active_sources(company_id))
+
     return True, f"✅ Đã thêm và index thành công!\n *{title}* ({chunks} chunks)"
 
 
@@ -111,6 +115,9 @@ def remove_source(url_or_id: str, company_id: str) -> tuple[bool, str]:
     )
 
     if result.data:
+        # Sync active sources count once deactivation succeeds.
+        sync_portal_usage(company_id, sources_count=count_active_sources(company_id))
+
         doc = (
             supabase.table("documents")
             .select("id, title")
