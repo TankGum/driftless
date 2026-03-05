@@ -6,10 +6,21 @@ from core.auth import get_user
 from core.decorators import safe_handler, admin_only, pm_or_above
 from core.logger import logger
 from core.orchestrator import process as orchestrate
+from config import TELEGRAM_RAG_FIRST
 from database.supabase import supabase
 from knowledge.retriever import answer_question
 from knowledge.source_manager import add_source, remove_source, list_sources, resync_all_sources
 from support.drafter import draft_document
+
+
+def _is_no_info_answer(answer: str) -> bool:
+    text = (answer or "").strip().lower()
+    no_info_markers = [
+        "tôi chưa có tài liệu",
+        "tôi không có thông tin",
+        "không có thông tin về vấn đề này",
+    ]
+    return any(marker in text for marker in no_info_markers)
 
 
 @safe_handler
@@ -252,7 +263,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     processing_msg = await update.message.reply_text(" Đang suy nghĩ...")
     try:
-        answer = orchestrate(text, company_id, user)
+        logger.info(
+            "telegram_query: telegram_id=%s company_id=%s role=%s rag_first=%s query_len=%s",
+            telegram_id,
+            company_id,
+            user.get("role"),
+            TELEGRAM_RAG_FIRST,
+            len(text or ""),
+        )
+
+        pipeline = "orchestrate"
+        if TELEGRAM_RAG_FIRST:
+            answer = answer_question(text, company_id)
+            if _is_no_info_answer(answer):
+                pipeline = "rag_then_orchestrate"
+                answer = orchestrate(text, company_id, user)
+            else:
+                pipeline = "rag_only"
+        else:
+            answer = orchestrate(text, company_id, user)
+
+        logger.info(
+            "telegram_query_done: telegram_id=%s company_id=%s pipeline=%s no_info=%s",
+            telegram_id,
+            company_id,
+            pipeline,
+            _is_no_info_answer(answer),
+        )
+
         await processing_msg.delete()
         await update.message.reply_text(answer, parse_mode="Markdown")
         increment_query_count(company_id)

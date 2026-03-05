@@ -1,5 +1,30 @@
 // Auto-login: read auth_token from URL query param and set as cookie
 (function () {
+  var TAB_TITLE = "Driftless Chatbot";
+  var FAVICON_PATH = "/public/favicon.svg";
+
+  function ensureTitleAndIcon() {
+    if (document.title !== TAB_TITLE) {
+      document.title = TAB_TITLE;
+    }
+
+    var icon = document.querySelector("link[rel~='icon']");
+    if (!icon) {
+      icon = document.createElement("link");
+      icon.setAttribute("rel", "icon");
+      document.head.appendChild(icon);
+    }
+    if (icon.getAttribute("href") !== FAVICON_PATH) {
+      icon.setAttribute("type", "image/svg+xml");
+      icon.setAttribute("href", FAVICON_PATH);
+    }
+  }
+
+  ensureTitleAndIcon();
+  window.addEventListener("load", ensureTitleAndIcon);
+  setTimeout(ensureTitleAndIcon, 300);
+  setTimeout(ensureTitleAndIcon, 1200);
+
   var params = new URLSearchParams(window.location.search);
   var token = params.get("auth_token");
   if (token) {

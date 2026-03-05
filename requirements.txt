@@ -26,6 +26,7 @@ pytesseract
 Pillow
 pypdf
 python-docx
+openpyxl
 pandas==3.0.1
 numpy==2.4.2
 httpx==0.28.1

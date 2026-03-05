@@ -38,13 +38,45 @@ def _start_scheduler():
 
 
 def _start_telegram_polling():
+    import asyncio
     import threading
+    import time
     from platforms.telegram.webhook import _build_application
 
     def _run():
-        tg_app = _build_application()
-        logger.info("Telegram bot started (polling)")
-        tg_app.run_polling(drop_pending_updates=True, stop_signals=None)
+        backoff = 5
+        while True:
+            tg_app = None
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                tg_app = _build_application()
+                logger.info("Telegram bot started (polling)")
+                tg_app.run_polling(
+                    drop_pending_updates=True,
+                    stop_signals=None,
+                    close_loop=False,
+                    bootstrap_retries=5,
+                )
+                backoff = 5
+            except Exception as exc:
+                logger.warning(f"Telegram polling crashed (retry in {backoff}s): {exc}")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 120)
+            finally:
+                try:
+                    if tg_app is not None and not loop.is_closed() and tg_app.running:
+                        loop.run_until_complete(tg_app.stop())
+                except Exception:
+                    pass
+                try:
+                    if tg_app is not None and not loop.is_closed():
+                        loop.run_until_complete(tg_app.shutdown())
+                except Exception:
+                    pass
+                asyncio.set_event_loop(None)
+                if not loop.is_closed():
+                    loop.close()
 
     threading.Thread(target=_run, daemon=True, name="telegram-polling").start()
 

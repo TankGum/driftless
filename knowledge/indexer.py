@@ -5,6 +5,7 @@ import hashlib
 
 from database.supabase import supabase
 from core.portal_usage import count_active_sources, sync_portal_usage
+from core.source_limits import can_add_source
 
 
 def _insert_chunks_batched(records: list, batch_size: int = 5) -> None:
@@ -161,12 +162,19 @@ def _read_local_pdf(path: str) -> list[str]:
 
         doc = fitz.open(path)
         ocr_chunks = []
-        for page in doc:
-            pix = page.get_pixmap(dpi=200)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            text = pytesseract.image_to_string(img, lang="vie+eng").strip()
-            if text:
-                ocr_chunks.append(text)
+        try:
+            for page in doc:
+                pix = page.get_pixmap(dpi=200)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                try:
+                    text = pytesseract.image_to_string(img, lang="vie+eng").strip()
+                except pytesseract.TesseractError:
+                    # Fallback nếu máy chưa có gói ngôn ngữ tiếng Việt.
+                    text = pytesseract.image_to_string(img, lang="eng").strip()
+                if text:
+                    ocr_chunks.append(text)
+        finally:
+            doc.close()
         return ocr_chunks
     except Exception as e:
         print(f"  [OCR] Lỗi Tesseract: {e}")
@@ -212,6 +220,44 @@ def _read_local_txt(path: str) -> list[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size) if text[i:i + chunk_size].strip()]
 
 
+def _read_local_xlsx(path: str) -> list[str]:
+    """Đọc XLSX local, chunk theo từng dòng dữ liệu trong từng sheet."""
+    try:
+        import openpyxl
+    except ImportError:
+        raise ImportError("Cần cài openpyxl: pip install openpyxl")
+
+    # File upload tạm có thể không có extension; đọc qua BytesIO để openpyxl không reject.
+    with open(path, "rb") as f:
+        xlsx_bytes = f.read()
+    wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    max_chunk_len = 1500
+
+    try:
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                cells = [str(v).strip() for v in row if v is not None and str(v).strip()]
+                if not cells:
+                    continue
+                line = f"[Sheet: {ws.title}] " + " | ".join(cells)
+                if current_len + len(line) > max_chunk_len and current:
+                    chunks.append("\n".join(current))
+                    current = []
+                    current_len = 0
+                current.append(line)
+                current_len += len(line) + 1
+    finally:
+        wb.close()
+
+    if current:
+        chunks.append("\n".join(current))
+
+    return chunks
+
+
 def sync_local_file(
     file_path: str,
     company_id: str,
@@ -243,8 +289,10 @@ def sync_local_file(
             text_chunks = _read_local_docx(file_path)
         elif ext == ".txt":
             text_chunks = _read_local_txt(file_path)
+        elif ext == ".xlsx":
+            text_chunks = _read_local_xlsx(file_path)
         else:
-            return False, f"❌ Định dạng '{ext}' chưa được hỗ trợ. Chấp nhận: .pdf, .docx, .txt", None
+            return False, f"❌ Định dạng '{ext}' chưa được hỗ trợ. Chấp nhận: .pdf, .docx, .txt, .xlsx", None
     except Exception as e:
         return False, f"❌ Không đọc được file: {e}", None
 
@@ -297,6 +345,14 @@ def sync_local_file(
             supabase.table("data_sources").delete().eq("company_id", company_id).eq("source_id", old_source_id).execute()
 
     # Tìm document record cũ nếu đã tồn tại (cùng source_id)
+    allowed, limit_message = can_add_source(
+        company_id,
+        source_id,
+        allow_replace=force_replace,
+    )
+    if not allowed:
+        return False, limit_message, None
+
     existing_doc = (
         supabase.table("documents")
         .select("id")

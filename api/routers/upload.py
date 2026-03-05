@@ -9,8 +9,8 @@ from knowledge.indexer import sync_local_file
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
-MAX_FILE_SIZE_MB = 50
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".xlsx"}
+MAX_FILE_SIZE_MB = 500
 
 
 class UploadResponse(BaseModel):

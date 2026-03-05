@@ -2,6 +2,7 @@ import json
 
 from core.logger import logger
 from core.portal_usage import count_active_sources, sync_portal_usage
+from core.source_limits import can_add_source
 from config import GOOGLE_CREDENTIALS_PATH
 from database.supabase import supabase
 from knowledge.indexer import sync_source
@@ -38,6 +39,10 @@ def add_source(url_or_id: str, company_id: str, added_by: int | str) -> tuple[bo
 
     if existing.data:
         return False, "⚠️ Tài liệu này đã được thêm trước đó rồi."
+
+    allowed, limit_message = can_add_source(company_id, source_id)
+    if not allowed:
+        return False, limit_message
 
     try:
         if source_type == "google_docs":
